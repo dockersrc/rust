@@ -1,8 +1,7 @@
-# syntax=docker/dockerfile:1
-# Docker image for alpine using the alpine template
+# Docker image for rust using the alpine template
 ARG IMAGE_NAME="rust"
 ARG PHP_SERVER="rust"
-ARG BUILD_DATE="202408111050"
+ARG BUILD_DATE="202511291148"
 ARG LANGUAGE="en_US.UTF-8"
 ARG TIMEZONE="America/New_York"
 ARG WWW_ROOT_DIR="/usr/local/share/httpd/default"
@@ -10,6 +9,7 @@ ARG DEFAULT_FILE_DIR="/usr/local/share/template-files"
 ARG DEFAULT_DATA_DIR="/usr/local/share/template-files/data"
 ARG DEFAULT_CONF_DIR="/usr/local/share/template-files/config"
 ARG DEFAULT_TEMPLATE_DIR="/usr/local/share/template-files/defaults"
+ARG PATH="/usr/local/etc/docker/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 ARG USER="root"
 ARG SHELL_OPTS="set -e -o pipefail"
@@ -19,7 +19,6 @@ ARG EXPOSE_PORTS=""
 ARG PHP_VERSION="system"
 ARG NODE_VERSION="system"
 ARG NODE_MANAGER="system"
-ARG LANG_VERSION="stable"
 
 ARG IMAGE_REPO="casjaysdev/rust"
 ARG IMAGE_VERSION="latest"
@@ -53,16 +52,18 @@ ARG NODE_MANAGER
 ARG PHP_VERSION
 ARG PHP_SERVER
 ARG SHELL_OPTS
+ARG PATH
 
 ARG PACK_LIST="bash-completion git curl wget sudo unzip iproute2 ssmtp openssl jq tzdata mailcap ncurses util-linux pciutils usbutils coreutils binutils findutils grep rsync zip tini py3-pip procps net-tools coreutils sed gawk grep attr findutils readline lsof less curl shadow certbot ca-certificates gcc musl-dev "
 
 ENV ENV=~/.profile
 ENV SHELL="/bin/sh"
+ENV PATH="${PATH}"
 ENV TZ="${TIMEZONE}"
 ENV TIMEZONE="${TZ}"
 ENV LANG="${LANGUAGE}"
 ENV TERM="xterm-256color"
-ENV HOSTNAME="casjaysdev-rust"
+ENV HOSTNAME="casjaysdevdocker-rust"
 
 USER ${USER}
 WORKDIR /root
@@ -70,14 +71,12 @@ WORKDIR /root
 COPY ./rootfs/usr/local/bin/. /usr/local/bin/
 
 RUN set -e; \
+  echo "Updating the system and ensuring bash is installed"; \
+  pkmgr update;pkmgr install bash
+
+RUN set -e; \
   echo "Setting up prerequisites"; \
-  apk --no-cache add bash; \
-  SH_CMD="$(which sh 2>/dev/null||command -v sh 2>/dev/null)"; \
-  BASH_CMD="$(which bash 2>/dev/null||command -v bash 2>/dev/null)"; \
-  [ -x "$BASH_CMD" ] && /usr/local/bin/symlink "$BASH_CMD" "/bin/sh" || true; \
-  [ -x "$BASH_CMD" ] && /usr/local/bin/symlink "$BASH_CMD" "/usr/bin/sh" || true; \
-  [ -x "$BASH_CMD" ] && [ "$SH_CMD" != "/bin/sh" ] && /usr/local/bin/symlink "$BASH_CMD" "$SH_CMD" || true; \
-  [ -n "$BASH_CMD" ] && sed -i 's|root:x:.*|root:x:0:0:root:/root:'$BASH_CMD'|g' "/etc/passwd" || true
+  true
 
 ENV SHELL="/bin/bash"
 SHELL [ "/bin/bash", "-c" ]
@@ -92,11 +91,7 @@ RUN echo "Initializing the system"; \
 
 RUN echo "Creating and editing system files "; \
   $SHELL_OPTS; \
-  rm -Rf "/etc/apk/repositories"; \
-  [ "$DISTRO_VERSION" = "latest" ] && DISTRO_VERSION="edge";[ "$DISTRO_VERSION" = "edge" ] || DISTRO_VERSION="v${DISTRO_VERSION}"; \
-  echo "http://dl-cdn.alpinelinux.org/alpine/${DISTRO_VERSION}/main" >>"/etc/apk/repositories"; \
-  echo "http://dl-cdn.alpinelinux.org/alpine/${DISTRO_VERSION}/community" >>"/etc/apk/repositories"; \
-  if [ "${DISTRO_VERSION}" = "edge" ]; then echo "http://dl-cdn.alpinelinux.org/alpine/${DISTRO_VERSION}/testing" >>"/etc/apk/repositories";fi; \
+  [ -f "/root/.profile" ] || touch "/root/.profile"; \
   if [ -f "/root/docker/setup/01-system.sh" ];then echo "Running the system script";/root/docker/setup/01-system.sh||{ echo "Failed to execute /root/docker/setup/01-system.sh" >&2 && exit 10; };echo "Done running the system script";fi; \
   echo ""
 
@@ -133,7 +128,7 @@ RUN echo "Updating system files "; \
   [ -n "$PHP_FPM" ] && [ -z "$(command -v php-fpm 2>/dev/null)" ] && ln -sf "$PHP_FPM" "/usr/bin/php-fpm" 2>/dev/null || true; \
   if [ -f "/etc/profile.d/color_prompt.sh.disabled" ]; then mv -f "/etc/profile.d/color_prompt.sh.disabled" "/etc/profile.d/color_prompt.sh";fi ; \
   { [ -f "/etc/bash/bashrc" ] && cp -Rf "/etc/bash/bashrc" "/root/.bashrc"; } || { [ -f "/etc/bashrc" ] && cp -Rf "/etc/bashrc" "/root/.bashrc"; } || { [ -f "/etc/bash.bashrc" ] && cp -Rf "/etc/bash.bashrc" "/root/.bashrc"; } || true; \
-  if [ -z "$(command -v "apt-get" 2>/dev/null)" ];then grep -s -q 'alias quit' "/root/.bashrc" || printf '# Profile\n\n%s\n%s\n%s\n' '. /etc/profile' '. /root/.profile' "alias quit='exit 0 2>/dev/null'" >>"/root/.bashrc"; fi; \
+  if [ -z "$(command -v "apt-get" 2>/dev/null)" ];then grep -sh -q 'alias quit' "/root/.bashrc" || printf '# Profile\n\n%s\n%s\n%s\n' '. /etc/profile' '. /root/.profile' "alias quit='exit 0 2>/dev/null'" >>"/root/.bashrc"; fi; \
   if [ "$PHP_VERSION" != "system" ] && [ -e "/etc/php" ] && [ -d "/etc/${PHP_VERSION}" ];then rm -Rf "/etc/php";fi; \
   if [ "$PHP_VERSION" != "system" ] && [ -n "${PHP_VERSION}" ] && [ -d "/etc/${PHP_VERSION}" ];then ln -sf "/etc/${PHP_VERSION}" "/etc/php";fi; \
   if [ -f "/root/docker/setup/03-files.sh" ];then echo "Running the files script";/root/docker/setup/03-files.sh||{ echo "Failed to execute /root/docker/setup/03-files.sh" >&2 && exit 10; };echo "Done running the files script";fi; \
@@ -141,7 +136,7 @@ RUN echo "Updating system files "; \
 
 RUN echo "Custom Settings"; \
   $SHELL_OPTS; \
-  echo ""
+echo ""
 
 RUN echo "Setting up users and scripts "; \
   $SHELL_OPTS; \
@@ -158,7 +153,7 @@ RUN echo "Setting OS Settings "; \
 
 RUN echo "Custom Applications"; \
   $SHELL_OPTS; \
-  echo ""
+echo ""
 
 RUN echo "Running custom commands"; \
   if [ -f "/root/docker/setup/05-custom.sh" ];then echo "Running the custom script";/root/docker/setup/05-custom.sh||{ echo "Failed to execute /root/docker/setup/05-custom.sh" && exit 10; };echo "Done running the custom script";fi; \
@@ -188,6 +183,7 @@ RUN echo "Deleting unneeded files"; \
 RUN echo "Init done"
 FROM scratch
 ARG TZ
+ARG PATH
 ARG USER
 ARG TIMEZONE
 ARG LANGUAGE
@@ -208,14 +204,14 @@ ARG NODE_MANAGER
 ARG PHP_VERSION
 ARG PHP_SERVER
 ARG LICENSE="WTFPL"
-ARG ENV_PORTS=""
+ARG ENV_PORTS="${EXPOSE_PORTS}"
 
 USER ${USER}
 WORKDIR /root
 
 LABEL maintainer="CasjaysDev <docker-admin@casjaysdev.pro>"
 LABEL org.opencontainers.image.vendor="CasjaysDev"
-LABEL org.opencontainers.image.authors="CasjaysDev <docker-admin@casjaysdev.pro"
+LABEL org.opencontainers.image.authors="CasjaysDev"
 LABEL org.opencontainers.image.description="Containerized version of ${IMAGE_NAME}"
 LABEL org.opencontainers.image.title="${IMAGE_NAME}"
 LABEL org.opencontainers.image.base.name="${IMAGE_NAME}"
@@ -223,25 +219,26 @@ LABEL org.opencontainers.image.authors="${LICENSE}"
 LABEL org.opencontainers.image.created="${BUILD_DATE}"
 LABEL org.opencontainers.image.version="${BUILD_VERSION}"
 LABEL org.opencontainers.image.schema-version="${BUILD_VERSION}"
-LABEL org.opencontainers.image.url="https://hub.docker.com/r/casjaysdev/rust"
-LABEL org.opencontainers.image.source="https://hub.docker.com/r/casjaysdev/rust"
+LABEL org.opencontainers.image.url="https://hub.docker.com/casjaysdevdocker/rust"
+LABEL org.opencontainers.image.source="https://hub.docker.com/casjaysdevdocker/rust"
 LABEL org.opencontainers.image.vcs-type="Git"
 LABEL org.opencontainers.image.revision="${BUILD_VERSION}"
-LABEL org.opencontainers.image.source="https://github.com/casjaysdev/rust"
-LABEL org.opencontainers.image.documentation="https://github.com/casjaysdev/rust"
+LABEL org.opencontainers.image.source="https://github.com/casjaysdevdocker/rust"
+LABEL org.opencontainers.image.documentation="https://github.com/casjaysdevdocker/rust"
 LABEL com.github.containers.toolbox="false"
 
 ENV ENV=~/.bashrc
 ENV USER="${USER}"
-ENV SHELL="/bin/bash"
+ENV PATH="${PATH}"
 ENV TZ="${TIMEZONE}"
+ENV SHELL="/bin/bash"
 ENV TIMEZONE="${TZ}"
 ENV LANG="${LANGUAGE}"
 ENV TERM="xterm-256color"
 ENV PORT="${SERVICE_PORT}"
 ENV ENV_PORTS="${ENV_PORTS}"
 ENV CONTAINER_NAME="${IMAGE_NAME}"
-ENV HOSTNAME="casjaysdev-rust"
+ENV HOSTNAME="casjaysdev-${IMAGE_NAME}"
 ENV PHP_SERVER="${PHP_SERVER}"
 ENV NODE_VERSION="${NODE_VERSION}"
 ENV NODE_MANAGER="${NODE_MANAGER}"
@@ -255,6 +252,7 @@ VOLUME [ "/config","/data" ]
 
 EXPOSE ${SERVICE_PORT} ${ENV_PORTS}
 
-CMD [ "tail", "-f", "/dev/null" ]
-ENTRYPOINT [ "tini","--","/usr/local/bin/entrypoint.sh" ]
+STOPSIGNAL SIGRTMIN+3
+
+ENTRYPOINT [ "tini", "-p", "SIGTERM","--", "/usr/local/bin/entrypoint.sh" ]
 HEALTHCHECK --start-period=10m --interval=5m --timeout=15s CMD [ "/usr/local/bin/entrypoint.sh", "healthcheck" ]
