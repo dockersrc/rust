@@ -1,0 +1,78 @@
+#!/usr/bin/env sh
+# shellcheck shell=sh
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+##@Version           :  202408102055-git
+# @@Author           :  Jason Hempstead
+# @@Contact          :  jason@casjaysdev.pro
+# @@License          :  LICENSE.md
+# @@ReadME           :  copy --help
+# @@Copyright        :  Copyright: (c) 2024 Jason Hempstead, Casjays Developments
+# @@Created          :  Saturday, Aug 10, 2024 20:55 EDT
+# @@File             :  copy
+# @@Description      :  copies a file and shows progress
+# @@Changelog        :  New script
+# @@TODO             :  Better documentation
+# @@Other            :
+# @@Resource         :
+# @@Terminal App     :  no
+# @@sudo/root        :  no
+# @@Template         :  shell/bash
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# shellcheck disable=SC2016
+# shellcheck disable=SC2031
+# shellcheck disable=SC2120
+# shellcheck disable=SC2155
+# shellcheck disable=SC2199
+# shellcheck disable=SC2317
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# script variables
+APPNAME="$(basename "$0" 2>/dev/null)"
+VERSION="202408102055-git"
+RUN_USER="$USER"
+SET_UID="$(id -u)"
+COPY_CWD="$(realpath "$PWD")"
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# script functions
+if [ "$SHOW_RAW" != "true" ]; then
+  __printf_color() { printf "%b" "$(tput setaf "${2:-$DEFAULT_COLOR}" 2>/dev/null)" "$1\n" "$(tput sgr0 2>/dev/null)"; }
+else
+  # Disable colorization
+  __printf_color() { printf '%b\n' "$1" | tr -d '\t' | sed '/^%b$/d;s,\x1B\[ 0-9;]*[a-zA-Z],,g'; }
+fi
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# check for command
+__cmd_exists() { which $1 >/dev/null 2>&1 || return 1; }
+__function_exists() { builtin type $1 >/dev/null 2>&1 || return 1; }
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# custom functions
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Define Variables
+DEFAULT_COLOR="7"
+COPY_EXIT_STATUS=0
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Main application
+{ [ $# -eq 2 ] || [ "$1" = "--help" ]; } || { __printf_color "Usage: $APPNAME fromFile toFile" && exit 1; }
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+is_link="$(ls -la "$2" 2>/dev/null | awk '{print $NF}')"
+if [ "$1" != "$is_link" ]; then
+  if [ -d "$1" ]; then
+    mkdir -p "$2"
+    cp -Rf "$1/." "$2/"
+    COPY_EXIT_STATUS=$?
+  elif [ -e "$1" ]; then
+    cp -Rf "$1" "$2"
+    COPY_EXIT_STATUS=$?
+  else
+    COPY_EXIT_STATUS=2
+  fi
+fi
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# End application
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# lets exit with code
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+exit $COPY_EXIT_STATUS
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# ex: ts=2 sw=2 et filetype=sh
+
