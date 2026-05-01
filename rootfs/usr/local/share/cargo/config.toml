@@ -1,0 +1,70 @@
+# Cargo system config - lives at $CARGO_HOME/config.toml.
+#
+# Default linker overrides for cross-compile targets so plain
+# `cargo build --target=...` works for pure-Rust crates without the
+# user having to set up a separate cross C toolchain. The image already
+# ships:
+#
+#   - rust-lld   (via the llvm-tools-preview rustup component, symlinked
+#                 to /usr/local/bin/rust-lld in 02-packages.sh)
+#   - mingw-w64  (apk: mingw-w64-gcc, for native Windows GNU linking)
+#   - zig        (apk + cargo-zigbuild bundled copy, for full C cross
+#                 toolchains incl. macOS/glibc/RISC-V)
+#
+# For crates that pull in C deps (*-sys, openssl-sys, ring, etc.) prefer
+# `cargo zigbuild --target=...` instead - it handles both the linker AND
+# the C compile.
+
+# --- Linux musl / glibc (pure-Rust via rust-lld) ---
+[target.aarch64-unknown-linux-musl]
+linker = "rust-lld"
+
+[target.aarch64-unknown-linux-gnu]
+linker = "rust-lld"
+
+[target.armv7-unknown-linux-musleabihf]
+linker = "rust-lld"
+
+[target.armv7-unknown-linux-gnueabihf]
+linker = "rust-lld"
+
+[target.arm-unknown-linux-gnueabihf]
+linker = "rust-lld"
+
+[target.i686-unknown-linux-musl]
+linker = "rust-lld"
+
+[target.i686-unknown-linux-gnu]
+linker = "rust-lld"
+
+# Note: riscv64gc-unknown-linux-{musl,gnu}, powerpc64le-unknown-linux-gnu,
+# and s390x-unknown-linux-gnu need libgcc_s + libc for the target arch
+# which aren't shipped with rust-lld's bundled musl. Use
+# `cargo zigbuild --target=...` for these.
+
+# --- Windows GNU (mingw) ---
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+
+[target.i686-pc-windows-gnu]
+linker = "i686-w64-mingw32-gcc"
+
+# --- Embedded ARM Cortex-M (no_std) ---
+# These produce no_std bare-metal binaries. Source code must be `no_std`
+# with a `#[panic_handler]` and `#[entry]` macro - see the cortex-m-rt
+# crate. A `std` hello-world will not compile for these targets.
+[target.thumbv6m-none-eabi]
+linker = "rust-lld"
+
+[target.thumbv7em-none-eabihf]
+linker = "rust-lld"
+
+[target."thumbv8m.main-none-eabihf"]
+linker = "rust-lld"
+
+# --- Embedded RISC-V (no_std) ---
+[target.riscv32imc-unknown-none-elf]
+linker = "rust-lld"
+
+[target.riscv32imac-unknown-none-elf]
+linker = "rust-lld"
