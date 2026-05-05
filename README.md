@@ -50,8 +50,8 @@ dockermgr update rust
 ## Install and run container
   
 ```shell
-dockerHome="/var/lib/srv/$USER/docker/casjaysdevdocker/rust/rust/latest/rootfs"
-mkdir -p "/var/lib/srv/$USER/docker/rust/rootfs"
+dockerHome="/var/lib/srv/$USER/docker/casjaysdevdocker/rust/rust/latest/volumes"
+mkdir -p "/var/lib/srv/$USER/docker/rust/volumes"
 git clone "https://github.com/dockermgr/rust" "$HOME/.local/share/CasjaysDev/dockermgr/rust"
 cp -Rfva "$HOME/.local/share/CasjaysDev/dockermgr/rust/rootfs/." "$dockerHome/"
 docker run -d \
@@ -77,8 +77,8 @@ services:
       - TZ=America/New_York
       - HOSTNAME=rust
     volumes:
-      - "/var/lib/srv/$USER/docker/casjaysdevdocker/rust/rust/latest/rootfs/data:/data:z"
-      - "/var/lib/srv/$USER/docker/casjaysdevdocker/rust/rust/latest/rootfs/config:/config:z"
+      - "/var/lib/srv/$USER/docker/casjaysdevdocker/rust/rust/latest/volumes/data:/data:z"
+      - "/var/lib/srv/$USER/docker/casjaysdevdocker/rust/rust/latest/volumes/config:/config:z"
     restart: always
 ```
   
