@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202604221922-git
+##@Version           :  202605242100-git
 # @@Author           :  CasjaysDev
 # @@Contact          :  CasjaysDev <docker-admin@casjaysdev.pro>
 # @@License          :  MIT
 # @@Copyright        :  Copyright 2026 CasjaysDev
-# @@Created          :  Wed Apr 22 07:22:58 PM EDT 2026
+# @@Created          :  Sun May 24 09:00:32 PM EDT 2026
 # @@File             :  06-post.sh
 # @@Description      :  script to run post
 # @@Changelog        :  newScript
@@ -34,9 +34,10 @@ exitCode=0
 
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Set the exit code
-#exitCode=$?
+exitCode=$?
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 exit $exitCode
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # ex: ts=2 sw=2 et filetype=sh
 # - - - - - - - - - - - - - - - - - - - - - - - - -
+
