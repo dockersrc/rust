@@ -207,7 +207,7 @@ ARG LICENSE="WTFPL"
 ARG ENV_PORTS="${EXPOSE_PORTS}"
 
 USER ${USER}
-WORKDIR /root
+WORKDIR /app
 
 LABEL maintainer="CasjaysDev <docker-admin@casjaysdev.pro>"
 LABEL org.opencontainers.image.vendor="CasjaysDev"
@@ -245,10 +245,13 @@ ENV NODE_MANAGER="${NODE_MANAGER}"
 ENV PHP_VERSION="${PHP_VERSION}"
 ENV DISTRO_VERSION="${IMAGE_VERSION}"
 ENV WWW_ROOT_DIR="${WWW_ROOT_DIR}"
+ENV RUSTUP_HOME="/usr/local/share/rustup"
+ENV CARGO_HOME="/usr/local/share/cargo"
+ENV RUSTUP_TOOLCHAIN="stable"
 
 COPY --from=build /. /
 
-VOLUME [ "/config","/data" ]
+VOLUME [ "/config","/data","/usr/local/share/cargo","/usr/local/share/rustup" ]
 
 EXPOSE ${SERVICE_PORT} ${ENV_PORTS}
 

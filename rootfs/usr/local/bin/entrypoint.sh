@@ -506,9 +506,11 @@ if [ "$START_SERVICES" = "yes" ] || [ -z "$1" ]; then
     echo "$$" >"$ENTRYPOINT_PID_FILE"
     __start_init_scripts "/usr/local/etc/docker/init.d"
     CONTAINER_INIT="${CONTAINER_INIT:-no}"
-    # Services started successfully - enter monitoring mode
-    __no_exit
-    exit $?
+    # Only block in monitoring mode when no user command was given
+    if [ $# -eq 0 ]; then
+      __no_exit
+      exit $?
+    fi
   fi
   START_SERVICES="no"
 fi
@@ -674,11 +676,8 @@ start)
 # Execute primary command
 *)
   if [ $# -eq 0 ]; then
-    if [ ! -f "$ENTRYPOINT_PID_FILE" ]; then
-      echo "$$" >"$ENTRYPOINT_PID_FILE"
-      [ "$START_SERVICES" = "no" ] && [ "$CONTAINER_INIT" = "yes" ] || __start_init_scripts "/usr/local/etc/docker/init.d"
-    fi
-    __no_exit
+    # No args: run the default Rust workflow (fmt → clippy → test → build)
+    __exec_command rust-workflow
   else
     __exec_command "$@"
   fi

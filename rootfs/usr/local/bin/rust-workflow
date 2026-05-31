@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+##@Version           :  202605311104-git
+# @@Author           :  Jason Hempstead
+# @@Contact          :  jason@casjaysdev.pro
+# @@License          :  WTFPL
+# @@ReadME           :  rust-workflow --help
+# @@Copyright        :  Copyright: (c) 2026 Jason Hempstead, Casjays Developments
+# @@Created          :  Sunday, May 31, 2026 11:04 EDT
+# @@File             :  rust-workflow
+# @@Description      :  Default Rust workflow: fmt → clippy → test → build
+# @@Changelog        :  New script
+# @@Other            :
+# @@Resource         :
+# @@Terminal App     :  no
+# @@sudo/root        :  no
+# @@Template         :  other/docker-workflow
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# shellcheck disable=SC1001,SC1003,SC2001,SC2003,SC2016,SC2031,SC2090,SC2115,SC2120,SC2155,SC2199,SC2229,SC2317,SC2329
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# Runs automatically when `docker run casjaysdev/rust` is called with no args.
+# Working directory must be a Cargo workspace or crate root (Cargo.toml must exist).
+set -euo pipefail
+
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# Resolve the working directory — prefer /app if mounted, then cwd
+WORK_DIR="${CARGO_WORKDIR:-${PWD}}"
+cd "$WORK_DIR"
+
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# Require a Cargo.toml so we fail fast with a clear message instead of
+# cryptic cargo errors about missing manifests
+if [ ! -f "Cargo.toml" ]; then
+  echo "Error: no Cargo.toml found in ${WORK_DIR}" >&2
+  echo "Mount your project with: docker run --rm -v \"\$(pwd)\":/app casjaysdev/rust" >&2
+  exit 1
+fi
+
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# Resolve the crate or workspace name from the manifest
+CRATE="$(awk -F'"' '/^\[package\]/{p=1} p && /^name[[:space:]]*=/{print $2; exit}' Cargo.toml)"
+[ -z "$CRATE" ] && CRATE="$(basename "$WORK_DIR")"
+
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# Optional target override — set CARGO_BUILD_TARGET for cross-compilation or
+# static musl builds (e.g. x86_64-unknown-linux-musl)
+BUILD_TARGET="${CARGO_BUILD_TARGET:-}"
+
+# Collect extra flags for steps that accept a target
+build_flags=(--release)
+test_flags=()
+if [ -n "$BUILD_TARGET" ]; then
+  build_flags+=(--target "$BUILD_TARGET")
+  test_flags+=(--target "$BUILD_TARGET")
+fi
+
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+echo ""
+echo "▶ Rust workflow: ${CRATE}"
+echo "  Working dir:  ${WORK_DIR}"
+echo "  Rust:         $(rustc --version)"
+echo "  Cargo:        $(cargo --version)"
+[ -n "$BUILD_TARGET" ] && echo "  Target:       ${BUILD_TARGET}"
+echo ""
+
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+run_step() {
+  local label="$1"; shift
+  echo "── ${label}"
+  "$@"
+  echo ""
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# 1. Check formatting — report violations but do not auto-modify source
+run_step "cargo fmt --check" cargo fmt --all -- --check
+
+# 2. Lint with clippy across all targets and features; treat warnings as errors
+run_step "cargo clippy" cargo clippy --all-targets --all-features -- -D warnings
+
+# 3. Run the full test suite before spending time on a release build
+run_step "cargo test --all" cargo test --all "${test_flags[@]}"
+
+# 4. Build the release binary (static if CARGO_BUILD_TARGET is set)
+run_step "cargo build --release" cargo build --all "${build_flags[@]}"
+
+echo "✅ Done."
