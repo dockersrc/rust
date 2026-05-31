@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202605242100-git
+##@Version           :  202605311104-git
 # @@Author           :  CasjaysDev
 # @@Contact          :  CasjaysDev <docker-admin@casjaysdev.pro>
 # @@License          :  MIT
 # @@Copyright        :  Copyright 2026 CasjaysDev
-# @@Created          :  Sun May 24 09:00:33 PM EDT 2026
+# @@Created          :  Sun May 31 11:04:52 AM EDT 2026
 # @@File             :  07-cleanup.sh
 # @@Description      :  script to run cleanup
 # @@Changelog        :  newScript

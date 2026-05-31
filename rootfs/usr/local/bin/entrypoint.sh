@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202605241245-git
+##@Version           :  202605260122-git
 # @@Author           :  Jason Hempstead
 # @@Contact          :  jason@casjaysdev.pro
-# @@License          :  WTFPL
+# @@License          :  LICENSE.md
 # @@ReadME           :  entrypoint.sh --help
 # @@Copyright        :  Copyright: (c) 2026 Jason Hempstead, Casjays Developments
-# @@Created          :  Sunday, May 24, 2026 21:00 EDT
+# @@Created          :  Sunday, May 31, 2026 11:04 EDT
 # @@File             :  entrypoint.sh
-# @@Description      :  Entrypoint file for alpine
+# @@Description      :  Entrypoint file for rust
 # @@Changelog        :  New script
 # @@TODO             :  Better documentation
 # @@Other            :  
@@ -39,7 +39,7 @@ PATH="/usr/local/etc/docker/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin"
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Set bash options
 SCRIPT_FILE="$0"
-CONTAINER_NAME="alpine"
+CONTAINER_NAME="rust"
 SCRIPT_NAME="${SCRIPT_FILE##*/}"
 CONTAINER_NAME="${ENV_CONTAINER_NAME:-$CONTAINER_NAME}"
 # - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -61,7 +61,7 @@ case "$1" in
 # Help message
 -h | --help)
   shift 1
-  echo 'Docker container for '$CONTAINER_NAME''
+  echo "Docker container for $CONTAINER_NAME"
   echo "Usage: $CONTAINER_NAME [help tail cron exec start init shell procs ports healthcheck backup command]"
   echo ""
   exit 0
@@ -95,8 +95,8 @@ SERVICE_UID="${SERVICE_UID:-0}"
 SERVICE_GID="${SERVICE_GID:-0}"
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # User and group in which the service switches to - IE: nginx,apache,mysql,postgres
-#SERVICE_USER="${SERVICE_USER:-alpine}"   # execute command as another user
-#SERVICE_GROUP="${SERVICE_GROUP:-alpine}" # Set the service group
+#SERVICE_USER="${SERVICE_USER:-rust}"   # execute command as another user
+#SERVICE_GROUP="${SERVICE_GROUP:-rust}" # Set the service group
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Secondary ports
 # specifiy other ports
@@ -294,7 +294,7 @@ fi
 if [ "$ENTRYPOINT_FIRST_RUN" != "no" ]; then
   if [ "$CONFIG_DIR_INITIALIZED" = "no" ] || [ "$DATA_DIR_INITIALIZED" = "no" ]; then
     if [ "$ENTRYPOINT_MESSAGE" = "yes" ]; then
-      echo "Executing entrypoint script for alpine"
+      echo "Executing entrypoint script for rust"
     fi
   fi
   # - - - - - - - - - - - - - - - - - - - - - - - - -

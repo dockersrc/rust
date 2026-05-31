@@ -1,7 +1,7 @@
 # Docker image for rust using the alpine template
 ARG IMAGE_NAME="rust"
 ARG PHP_SERVER="rust"
-ARG BUILD_DATE="202604221922"
+ARG BUILD_DATE="202605311109"
 ARG LANGUAGE="en_US.UTF-8"
 ARG TIMEZONE="America/New_York"
 ARG WWW_ROOT_DIR="/usr/local/share/httpd/default"
@@ -20,7 +20,7 @@ ARG PHP_VERSION="system"
 ARG NODE_VERSION="system"
 ARG NODE_MANAGER="system"
 
-ARG IMAGE_REPO="casjaysdevdocker/rust"
+ARG IMAGE_REPO="casjaysdev/rust"
 ARG IMAGE_VERSION="latest"
 ARG CONTAINER_VERSION=""
 
@@ -54,19 +54,16 @@ ARG PHP_SERVER
 ARG SHELL_OPTS
 ARG PATH
 
-ARG PACK_LIST="git make bash tini ca-certificates openssh-client curl wget tar tzdata jq build-base gcc clang lld musl-dev pkgconf cmake perl openssl-dev libffi-dev zlib-dev linux-headers protobuf protobuf-dev mingw-w64-gcc binaryen wabt zig"
+ARG PACK_LIST="bash tini bash-completion git curl wget sudo unzip iproute2 openrc ssmtp openssl jq tzdata mailcap ncurses util-linux pciutils usbutils coreutils binutils findutils grep rsync zip py3-pip procps net-tools sed gawk attr readline lsof less shadow ca-certificates "
 
 ENV ENV=~/.profile
 ENV SHELL="/bin/sh"
-ENV PATH="/usr/local/share/cargo/bin:${PATH}"
+ENV PATH="${PATH}"
 ENV TZ="${TIMEZONE}"
 ENV TIMEZONE="${TZ}"
 ENV LANG="${LANGUAGE}"
 ENV TERM="xterm-256color"
 ENV HOSTNAME="casjaysdevdocker-rust"
-ENV CARGO_HOME="/usr/local/share/cargo"
-ENV RUSTUP_HOME="/usr/local/share/rustup"
-ENV RUSTUP_TOOLCHAIN="stable"
 
 USER ${USER}
 WORKDIR /root
@@ -121,7 +118,7 @@ RUN echo "Updating system files "; \
   echo 'hosts: files dns' >"/etc/nsswitch.conf"; \
   [ "$PHP_VERSION" = "system" ] && PHP_VERSION="php" || true; \
   PHP_BIN="$(command -v ${PHP_VERSION} 2>/dev/null || true)"; \
-  PHP_FPM="$(ls /usr/*bin/php*fpm* 2>/dev/null || true)"; \
+  set -- /usr/*bin/php*fpm*; [ -e "$1" ] && PHP_FPM="$1" || PHP_FPM=""; \
   pip_bin="$(command -v python3 2>/dev/null || command -v python2 2>/dev/null || command -v python 2>/dev/null || true)"; \
   py_version="$(command $pip_bin --version | sed 's|[pP]ython ||g' | awk -F '.' '{print $1$2}' | grep '[0-9]' || true)"; \
   [ "$py_version" -gt "310" ] && pip_opts="--break-system-packages " || pip_opts=""; \
@@ -178,7 +175,7 @@ RUN echo "Deleting unneeded files"; \
   rm -rf /lib/systemd/system/sockets.target.wants/*udev* || true; \
   rm -rf /lib/systemd/system/sockets.target.wants/*initctl* || true; \
   rm -Rf /usr/share/doc/* /var/tmp/* /var/cache/*/* /root/.cache/* /usr/share/info/* /tmp/* || true; \
-  if [ -d "/lib/systemd/system/sysinit.target.wants" ];then cd "/lib/systemd/system/sysinit.target.wants" && rm -f $(ls | grep -v systemd-tmpfiles-setup);fi; \
+  if [ -d "/lib/systemd/system/sysinit.target.wants" ];then cd "/lib/systemd/system/sysinit.target.wants" && for want_file in *; do [ "$want_file" = "systemd-tmpfiles-setup" ] || rm -f "$want_file"; done; fi; \
   if [ -f "/root/docker/setup/07-cleanup.sh" ];then echo "Running the cleanup script";/root/docker/setup/07-cleanup.sh||{ echo "Failed to execute /root/docker/setup/07-cleanup.sh" >&2 && exit 10; };echo "Done running the cleanup script";fi; \
   echo ""
 
@@ -210,7 +207,7 @@ ARG LICENSE="WTFPL"
 ARG ENV_PORTS="${EXPOSE_PORTS}"
 
 USER ${USER}
-WORKDIR /app
+WORKDIR /root
 
 LABEL maintainer="CasjaysDev <docker-admin@casjaysdev.pro>"
 LABEL org.opencontainers.image.vendor="CasjaysDev"
@@ -222,17 +219,17 @@ LABEL org.opencontainers.image.authors="${LICENSE}"
 LABEL org.opencontainers.image.created="${BUILD_DATE}"
 LABEL org.opencontainers.image.version="${BUILD_VERSION}"
 LABEL org.opencontainers.image.schema-version="${BUILD_VERSION}"
-LABEL org.opencontainers.image.url="https://hub.docker.com/casjaysdevdocker/rust"
-LABEL org.opencontainers.image.source="https://hub.docker.com/casjaysdevdocker/rust"
+LABEL org.opencontainers.image.url="https://docker.io/casjaysdev/rust"
+LABEL org.opencontainers.image.source="https://docker.io/casjaysdev/rust"
 LABEL org.opencontainers.image.vcs-type="Git"
 LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
-LABEL org.opencontainers.image.source="https://github.com/casjaysdevdocker/rust"
-LABEL org.opencontainers.image.documentation="https://github.com/casjaysdevdocker/rust"
+LABEL org.opencontainers.image.source="https://github.com/dockersrc/rust"
+LABEL org.opencontainers.image.documentation="https://github.com/dockersrc/rust"
 LABEL com.github.containers.toolbox="false"
 
 ENV ENV=~/.bashrc
 ENV USER="${USER}"
-ENV PATH="/usr/local/share/cargo/bin:${PATH}"
+ENV PATH="${PATH}"
 ENV TZ="${TIMEZONE}"
 ENV SHELL="/bin/bash"
 ENV TIMEZONE="${TZ}"
@@ -248,13 +245,10 @@ ENV NODE_MANAGER="${NODE_MANAGER}"
 ENV PHP_VERSION="${PHP_VERSION}"
 ENV DISTRO_VERSION="${IMAGE_VERSION}"
 ENV WWW_ROOT_DIR="${WWW_ROOT_DIR}"
-ENV CARGO_HOME="/usr/local/share/cargo"
-ENV RUSTUP_HOME="/usr/local/share/rustup"
-ENV RUSTUP_TOOLCHAIN="stable"
 
 COPY --from=build /. /
 
-VOLUME [ "/config","/data","/usr/local/share/cargo","/usr/local/share/rustup" ]
+VOLUME [ "/config","/data" ]
 
 EXPOSE ${SERVICE_PORT} ${ENV_PORTS}
 
@@ -262,3 +256,4 @@ STOPSIGNAL SIGRTMIN+3
 
 ENTRYPOINT [ "tini", "-p", "SIGTERM","--", "/usr/local/bin/entrypoint.sh" ]
 HEALTHCHECK --start-period=10m --interval=5m --timeout=15s CMD [ "/usr/local/bin/entrypoint.sh", "healthcheck" ]
+
