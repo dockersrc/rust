@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Docker image for rust using the alpine template
 ARG IMAGE_NAME="rust"
 ARG PHP_SERVER="rust"
@@ -99,7 +100,8 @@ RUN echo "Running pre-package commands"; \
   $SHELL_OPTS; \
   echo ""
 
-RUN echo "Setting up and installing packages"; \
+RUN --mount=type=cache,id=apk-cache,sharing=locked,target=/var/cache/apk \
+  echo "Setting up and installing packages"; \
   $SHELL_OPTS; \
   if [ -n "${PACK_LIST}" ];then echo "Installing packages: $PACK_LIST";echo "${PACK_LIST}" >/root/docker/setup/packages.txt;pkmgr install ${PACK_LIST};fi; \
   echo ""
@@ -154,7 +156,11 @@ RUN echo "Custom Applications"; \
   $SHELL_OPTS; \
 echo ""
 
-RUN echo "Running custom commands"; \
+RUN --mount=type=cache,id=cargo-registry,sharing=shared,target=/usr/local/share/cargo/registry \
+    --mount=type=cache,id=cargo-git,sharing=locked,target=/usr/local/share/cargo/git \
+    --mount=type=cache,id=rustup-downloads,sharing=locked,target=/usr/local/share/rustup/downloads \
+    --mount=type=cache,id=sccache-build,sharing=locked,target=/root/.cache/sccache \
+    echo "Running custom commands"; \
   if [ -f "/root/docker/setup/05-custom.sh" ];then echo "Running the custom script";/root/docker/setup/05-custom.sh||{ echo "Failed to execute /root/docker/setup/05-custom.sh" && exit 10; };echo "Done running the custom script";fi; \
   echo ""
 
@@ -248,10 +254,12 @@ ENV WWW_ROOT_DIR="${WWW_ROOT_DIR}"
 ENV RUSTUP_HOME="/usr/local/share/rustup"
 ENV CARGO_HOME="/usr/local/share/cargo"
 ENV RUSTUP_TOOLCHAIN="stable"
+ENV SCCACHE_DIR="/root/.cache/sccache"
+ENV CARGO_INCREMENTAL="0"
 
 COPY --from=build /. /
 
-VOLUME [ "/config","/data","/usr/local/share/cargo","/usr/local/share/rustup" ]
+VOLUME [ "/config","/data","/usr/local/share/cargo","/usr/local/share/rustup","/root/.cache/sccache" ]
 
 EXPOSE ${SERVICE_PORT} ${ENV_PORTS}
 

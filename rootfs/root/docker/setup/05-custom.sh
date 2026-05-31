@@ -32,7 +32,7 @@ exitCode=0
 # Main script
 
 # Install C/C++ toolchain and static-build dependencies needed by Rust -sys crates
-pkmgr install build-base musl-dev clang lld cmake make perl openssl-dev pkgconf
+pkmgr install build-base musl-dev clang lld cmake make perl openssl-dev pkgconf gdb
 
 # Install cross-compile toolchains — failures are non-fatal on minimal mirrors
 pkmgr install mingw-w64-gcc || true
@@ -79,6 +79,10 @@ rm -f /tmp/rustup-init /tmp/rustup-init.sha256
 
 # Add components not included in the default profile
 rustup component add rust-src rust-analyzer llvm-tools-preview
+
+# Nightly toolchain for miri and other unstable tooling; minimal profile
+# keeps the download small — only the compiler and std/src are pulled in
+rustup toolchain install nightly --profile minimal --component miri rust-src
 
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Cross-compile targets — Linux musl (fully static, no libc dependency)
@@ -181,7 +185,19 @@ cargo binstall -y \
   cargo-bloat \
   cargo-asm \
   mdbook \
-  mdbook-toc
+  mdbook-toc \
+  sccache \
+  typos \
+  taplo-cli \
+  cargo-sort \
+  cargo-hack \
+  cargo-criterion \
+  dprint \
+  cargo-careful \
+  cargo-public-api \
+  cargo-spellcheck \
+  cargo-geiger \
+  grcov
 
 # Tools that occasionally lack musl prebuilts — fall back to source compilation
 cargo binstall -y cargo-dist 2>/dev/null || cargo install cargo-dist
@@ -190,6 +206,9 @@ cargo binstall -y cargo-mutants 2>/dev/null || cargo install cargo-mutants
 cargo binstall -y flip-link 2>/dev/null || cargo install flip-link
 cargo binstall -y cargo-ndk 2>/dev/null || cargo install cargo-ndk
 cargo binstall -y trunk 2>/dev/null || cargo install trunk 2>/dev/null || true
+cargo binstall -y cargo-udeps 2>/dev/null || cargo install cargo-udeps || true
+cargo binstall -y cargo-fuzz 2>/dev/null || cargo install cargo-fuzz || true
+cargo binstall -y cargo-minimal-versions 2>/dev/null || cargo install cargo-minimal-versions || true
 
 # cross (the cross-rs cross-compilation runner)
 cargo binstall -y cross 2>/dev/null || cargo install cross 2>/dev/null || true
@@ -265,10 +284,12 @@ export RUSTUP_HOME="${RUSTUP_HOME}"
 export CARGO_HOME="${CARGO_HOME}"
 export RUSTUP_TOOLCHAIN="stable"
 export PATH="${CARGO_HOME}/bin:\${PATH}"
+export SCCACHE_DIR="\${SCCACHE_DIR:-/root/.cache/sccache}"
+export CARGO_INCREMENTAL="\${CARGO_INCREMENTAL:-0}"
 PROFILE
 
 # Work directories mounted or referenced in the README
-mkdir -p /app /work /root/app /root/project /data/build
+mkdir -p /app /work /root/app /root/project /data/build /root/.cache/sccache
 
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Set the exit code
