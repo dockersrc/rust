@@ -533,4 +533,4 @@ WTFPL
 ---
 
 🤖 [casjay](https://github.com/casjay)  
-⛵ [casjaysdevdocker](https://github.com/casjaysdevdocker) — [Docker Hub](https://hub.docker.com/u/casjaysdevdocker)  
+⛵ [casjaysdevdocker](https://github.com/casjaysdevdocker) — [Docker Hub](https://hub.docker.com/r/casjaysdev/rust)  
