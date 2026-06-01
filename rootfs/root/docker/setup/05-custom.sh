@@ -32,7 +32,7 @@ exitCode=0
 # Main script
 
 # Install C/C++ toolchain and static-build dependencies needed by Rust -sys crates
-pkmgr install build-base musl-dev clang lld cmake make perl openssl-dev pkgconf gdb
+pkmgr install build-base musl-dev clang clang-dev llvm-dev lld cmake make perl openssl-dev openssl-libs-static pkgconf gdb
 
 # Install cross-compile toolchains — failures are non-fatal on minimal mirrors
 pkmgr install mingw-w64-gcc || true
@@ -42,6 +42,10 @@ pkmgr install zig || true
 
 # Install binaryen (wasm-opt) for WASM size optimisation tooling
 pkmgr install binaryen || true
+
+# Install Linux perf — required by flamegraph and samply to record profiles;
+# non-fatal because availability depends on the host kernel and Alpine mirror
+pkmgr install perf || true
 
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # rustup paths — match the official rust:alpine convention so existing
@@ -82,7 +86,7 @@ rustup component add rust-src rust-analyzer llvm-tools-preview
 
 # Nightly toolchain for miri and other unstable tooling; minimal profile
 # keeps the download small — only the compiler and std/src are pulled in
-rustup toolchain install nightly --profile minimal --component miri rust-src
+rustup toolchain install nightly --profile minimal --component miri --component rust-src
 
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Cross-compile targets — Linux musl (fully static, no libc dependency)
@@ -161,7 +165,6 @@ cargo binstall -y \
   cargo-expand \
   cargo-info \
   bacon \
-  cargo-nextest \
   cargo-llvm-cov \
   cargo-tarpaulin \
   cargo-audit \
@@ -187,7 +190,7 @@ cargo binstall -y \
   mdbook \
   mdbook-toc \
   sccache \
-  typos \
+  typos-cli \
   taplo-cli \
   cargo-sort \
   cargo-hack \
@@ -200,7 +203,9 @@ cargo binstall -y \
   grcov
 
 # Tools that occasionally lack musl prebuilts — fall back to source compilation
-cargo binstall -y cargo-dist 2>/dev/null || cargo install cargo-dist
+# cargo-nextest requires --locked when building from source (locked-tripwire guard)
+cargo binstall -y cargo-nextest 2>/dev/null || cargo install --locked cargo-nextest || true
+cargo binstall -y cargo-dist 2>/dev/null || cargo install cargo-dist || true
 cargo binstall -y cargo-msrv 2>/dev/null || cargo install cargo-msrv
 cargo binstall -y cargo-mutants 2>/dev/null || cargo install cargo-mutants
 cargo binstall -y flip-link 2>/dev/null || cargo install flip-link
@@ -218,7 +223,7 @@ cargo install probe-rs --features cli 2>/dev/null || true
 
 # samply and cargo-flamegraph require a system perf or dtrace — best-effort
 cargo binstall -y samply 2>/dev/null || true
-cargo binstall -y cargo-flamegraph 2>/dev/null || true
+cargo binstall -y flamegraph 2>/dev/null || cargo install flamegraph || true
 
 # sqlx-cli and sea-orm-cli need project-specific feature flags at runtime;
 # install a broadly compatible build here as a convenience

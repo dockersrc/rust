@@ -188,7 +188,12 @@ Run miri with: `cargo +nightly miri test`
 | `cargo-criterion` | Criterion-based benchmark runner with statistical analysis |
 | `hyperfine` | Command-line benchmarking tool — wall-clock timing with statistics |
 | `samply` | Sampling profiler — records perf profiles, opens in Firefox Profiler |
-| `cargo-flamegraph` | Generate flame graphs from `cargo bench` or any cargo command |
+| `flamegraph` | Generate flame graphs from `cargo bench` or any cargo command (`cargo flamegraph`) |
+
+> **Perf note:** `perf` is installed from the Alpine package repo. Profiling with
+> `samply` or `flamegraph` inside Docker requires elevated capabilities at runtime:
+> `--privileged` or `--cap-add SYS_ADMIN --cap-add PERFMON`. This is a host grant
+> — it cannot be baked into the image.
 
 ### Fuzzing
 
