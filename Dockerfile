@@ -54,6 +54,7 @@ ARG PHP_VERSION
 ARG PHP_SERVER
 ARG SHELL_OPTS
 ARG PATH
+ARG TARGETARCH
 
 ARG PACK_LIST="bash tini bash-completion git curl wget sudo unzip iproute2 openrc ssmtp openssl jq tzdata mailcap ncurses util-linux pciutils usbutils coreutils binutils findutils grep rsync zip py3-pip procps net-tools sed gawk attr readline lsof less shadow ca-certificates "
 
@@ -100,7 +101,7 @@ RUN echo "Running pre-package commands"; \
   $SHELL_OPTS; \
   echo ""
 
-RUN --mount=type=cache,id=apk-cache,sharing=locked,target=/var/cache/apk \
+RUN --mount=type=cache,id=apk-cache-${TARGETARCH},sharing=locked,target=/var/cache/apk \
   echo "Setting up and installing packages"; \
   $SHELL_OPTS; \
   if [ -n "${PACK_LIST}" ];then echo "Installing packages: $PACK_LIST";echo "${PACK_LIST}" >/root/docker/setup/packages.txt;pkmgr install ${PACK_LIST};fi; \
@@ -157,9 +158,9 @@ RUN echo "Custom Applications"; \
 echo ""
 
 RUN --mount=type=cache,id=cargo-registry,sharing=shared,target=/usr/local/share/cargo/registry \
-    --mount=type=cache,id=cargo-git,sharing=locked,target=/usr/local/share/cargo/git \
-    --mount=type=cache,id=rustup-downloads,sharing=locked,target=/usr/local/share/rustup/downloads \
-    --mount=type=cache,id=sccache-build,sharing=locked,target=/root/.cache/sccache \
+    --mount=type=cache,id=cargo-git-${TARGETARCH},sharing=locked,target=/usr/local/share/cargo/git \
+    --mount=type=cache,id=rustup-downloads-${TARGETARCH},sharing=locked,target=/usr/local/share/rustup/downloads \
+    --mount=type=cache,id=sccache-build-${TARGETARCH},sharing=locked,target=/root/.cache/sccache \
     echo "Running custom commands"; \
   if [ -f "/root/docker/setup/05-custom.sh" ];then echo "Running the custom script";/root/docker/setup/05-custom.sh||{ echo "Failed to execute /root/docker/setup/05-custom.sh" && exit 10; };echo "Done running the custom script";fi; \
   echo ""

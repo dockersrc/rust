@@ -156,7 +156,9 @@ install -m 755 /tmp/cargo-binstall "$CARGO_HOME/bin/cargo-binstall"
 rm -f /tmp/cargo-binstall.tgz /tmp/cargo-binstall
 
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-# Workflow and development tools — all have musl prebuilt binaries
+# Workflow and development tools — most have musl prebuilt binaries for amd64 and arm64;
+# || true lets the build continue if an individual tool has no prebuilt and source
+# compilation fails (e.g. missing a C dep); failures are visible in the build log
 cargo binstall -y \
   cargo-edit \
   cargo-watch \
@@ -200,7 +202,7 @@ cargo binstall -y \
   cargo-public-api \
   cargo-spellcheck \
   cargo-geiger \
-  grcov
+  grcov || true
 
 # Tools that occasionally lack musl prebuilts — fall back to source compilation
 # cargo-nextest requires --locked when building from source (locked-tripwire guard)
