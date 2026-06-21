@@ -40,6 +40,10 @@ FROM tianon/gosu:latest AS gosu
 FROM --platform=$BUILDPLATFORM rust:alpine AS rust-tools
 ARG TARGETARCH
 
+# Force IPv4 for all curl calls — IPv6 routing on this host intercepts
+# *.github.com and presents a cert for a local domain, causing SSL SAN mismatch
+RUN printf -- '-4\n' > /root/.curlrc
+
 # zig acts as a universal C/C++ cross-compiler — ships with bundled musl headers
 # and stdlib for all targets, so no separate musl-cross toolchain is needed.
 # Wrapper scripts named aarch64-linux-musl-{gcc,g++,ar} let the CARGO_TARGET_*
