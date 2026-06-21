@@ -40,8 +40,10 @@ FROM tianon/gosu:latest AS gosu
 FROM --platform=$BUILDPLATFORM rust:alpine AS rust-tools
 ARG TARGETARCH
 
-# musl-cross provides aarch64-linux-musl-gcc for arm64 cross-compilation
-RUN apk add --no-cache musl-cross curl jq
+# musl-cross provides aarch64-linux-musl-gcc for arm64 cross-compilation;
+# it lives in the Alpine community repo which rust:alpine does not enable by default
+RUN apk add --no-cache curl jq \
+    && apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/edge/community musl-cross
 
 # Resolve Docker TARGETARCH → Rust target triple
 RUN case "${TARGETARCH}" in \
