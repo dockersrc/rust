@@ -30,6 +30,140 @@ ARG DISTRO_VERSION="${IMAGE_VERSION}"
 ARG BUILD_VERSION="${BUILD_DATE}"
 
 FROM tianon/gosu:latest AS gosu
+
+# ─── native cross-compile stage ───────────────────────────────────────────────
+# Mirrors the go-tools pattern: runs on the build platform (always native amd64
+# in CI). For arm64 targets the musl cross-toolchain compiles natively instead
+# of under QEMU — turning a 15-hour emulated build into a 30-60 minute one.
+# cargo binstall --target fetches prebuilt binaries from GitHub releases;
+# for tools without prebuilts it falls back to native cross-compilation.
+FROM --platform=$BUILDPLATFORM rust:alpine AS rust-tools
+ARG TARGETARCH
+
+# musl-cross provides aarch64-linux-musl-gcc for arm64 cross-compilation
+RUN apk add --no-cache musl-cross curl jq
+
+# Resolve Docker TARGETARCH → Rust target triple
+RUN case "${TARGETARCH}" in \
+      amd64) echo "x86_64-unknown-linux-musl" ;; \
+      arm64) echo "aarch64-unknown-linux-musl" ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac > /tmp/rust-target
+
+# Register the cross-compile target with the native (x86_64) Rust toolchain
+RUN RUST_TARGET="$(cat /tmp/rust-target)" && rustup target add "${RUST_TARGET}"
+
+# Linker and compiler overrides for aarch64-musl; harmless when TARGETARCH=amd64
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc
+ENV CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc
+ENV CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++
+ENV AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar
+
+# Install native (x86_64) sccache to /usr/local/bin for use as RUSTC_WRAPPER
+# during this stage; kept separate from the target-arch sccache in /rust-tools/bin
+RUN set -e; \
+    SCCACHE_VER="$(curl -fsSL https://api.github.com/repos/mozilla/sccache/releases/latest | jq -r '.tag_name')"; \
+    SCCACHE_ASSET="sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl"; \
+    curl -fsSL "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VER}/${SCCACHE_ASSET}.tar.gz" \
+      | tar xz -C /tmp; \
+    install -m 755 "/tmp/${SCCACHE_ASSET}/sccache" /usr/local/bin/sccache; \
+    rm -rf "/tmp/${SCCACHE_ASSET}"
+
+# Bootstrap native (x86_64) cargo-binstall
+RUN curl -fsSL "https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz" \
+    | tar xz -C /usr/local/cargo/bin cargo-binstall && \
+    chmod 755 /usr/local/cargo/bin/cargo-binstall
+
+# All tool binaries land in /rust-tools/bin — cleanly separate from rustup shims
+RUN mkdir -p /rust-tools/bin
+
+# CARGO_INSTALL_ROOT routes both `cargo install` and `cargo binstall` to /rust-tools/bin
+ENV CARGO_INSTALL_ROOT=/rust-tools
+
+# Install all Rust tools for the target arch with the native build cache active.
+# Prebuilts are downloaded directly; source fallbacks cross-compile on amd64.
+RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-git-native,sharing=locked,target=/usr/local/cargo/git \
+    --mount=type=cache,id=sccache-native,sharing=locked,target=/root/.cache/sccache \
+    set -o pipefail; \
+    RUST_TARGET="$(cat /tmp/rust-target)"; \
+    export RUSTC_WRAPPER=/usr/local/bin/sccache; \
+    export SCCACHE_DIR=/root/.cache/sccache; \
+    cargo binstall -y --target "${RUST_TARGET}" \
+      cargo-edit \
+      cargo-watch \
+      cargo-update \
+      cargo-outdated \
+      cargo-expand \
+      cargo-info \
+      bacon \
+      cargo-llvm-cov \
+      cargo-tarpaulin \
+      cargo-audit \
+      cargo-deny \
+      cargo-machete \
+      cargo-semver-checks \
+      cargo-make \
+      cargo-deb \
+      cargo-generate \
+      cargo-release \
+      cargo-chef \
+      cargo-zigbuild \
+      just \
+      tokei \
+      hyperfine \
+      wasm-pack \
+      wasm-tools \
+      wasm-bindgen-cli \
+      cbindgen \
+      cargo-binutils \
+      cargo-bloat \
+      cargo-asm \
+      mdbook \
+      mdbook-toc \
+      sccache \
+      typos-cli \
+      taplo-cli \
+      cargo-sort \
+      cargo-hack \
+      cargo-criterion \
+      dprint \
+      cargo-careful \
+      cargo-public-api \
+      cargo-spellcheck \
+      cargo-geiger \
+      grcov || true; \
+    cargo binstall -y --target "${RUST_TARGET}" cargo-nextest 2>/dev/null || \
+      cargo install --locked --target "${RUST_TARGET}" cargo-nextest || true; \
+    cargo binstall -y --target "${RUST_TARGET}" cargo-dist 2>/dev/null || \
+      cargo install --target "${RUST_TARGET}" cargo-dist || true; \
+    cargo binstall -y --target "${RUST_TARGET}" cargo-msrv 2>/dev/null || \
+      cargo install --target "${RUST_TARGET}" cargo-msrv; \
+    cargo binstall -y --target "${RUST_TARGET}" cargo-mutants 2>/dev/null || \
+      cargo install --target "${RUST_TARGET}" cargo-mutants; \
+    cargo binstall -y --target "${RUST_TARGET}" flip-link 2>/dev/null || \
+      cargo install --target "${RUST_TARGET}" flip-link; \
+    cargo binstall -y --target "${RUST_TARGET}" cargo-ndk 2>/dev/null || \
+      cargo install --target "${RUST_TARGET}" cargo-ndk; \
+    cargo binstall -y --target "${RUST_TARGET}" trunk 2>/dev/null || \
+      cargo install --target "${RUST_TARGET}" trunk 2>/dev/null || true; \
+    cargo binstall -y --target "${RUST_TARGET}" cargo-udeps 2>/dev/null || \
+      cargo install --target "${RUST_TARGET}" cargo-udeps || true; \
+    cargo binstall -y --target "${RUST_TARGET}" cargo-fuzz 2>/dev/null || \
+      cargo install --target "${RUST_TARGET}" cargo-fuzz || true; \
+    cargo binstall -y --target "${RUST_TARGET}" cargo-minimal-versions 2>/dev/null || \
+      cargo install --target "${RUST_TARGET}" cargo-minimal-versions || true; \
+    cargo binstall -y --target "${RUST_TARGET}" cross 2>/dev/null || \
+      cargo install --target "${RUST_TARGET}" cross 2>/dev/null || true; \
+    cargo binstall -y --target "${RUST_TARGET}" samply 2>/dev/null || true; \
+    cargo binstall -y --target "${RUST_TARGET}" flamegraph 2>/dev/null || \
+      cargo install --target "${RUST_TARGET}" flamegraph || true; \
+    cargo install --target "${RUST_TARGET}" probe-rs --features cli 2>/dev/null || true; \
+    cargo install --target "${RUST_TARGET}" sqlx-cli \
+      --no-default-features --features rustls,postgres,mysql,sqlite 2>/dev/null || true; \
+    cargo install --target "${RUST_TARGET}" sea-orm-cli \
+      --no-default-features --features codegen,sqlx-mysql,sqlx-postgres,sqlx-sqlite,runtime-tokio-rustls 2>/dev/null || true
+
 FROM ${PULL_URL}:${DISTRO_VERSION} AS build
 ARG TZ
 ARG USER
@@ -157,11 +291,15 @@ RUN echo "Custom Applications"; \
   $SHELL_OPTS; \
 echo ""
 
-RUN --mount=type=cache,id=cargo-registry,sharing=shared,target=/usr/local/share/cargo/registry \
-    --mount=type=cache,id=cargo-git-${TARGETARCH},sharing=locked,target=/usr/local/share/cargo/git \
-    --mount=type=cache,id=rustup-downloads-${TARGETARCH},sharing=locked,target=/usr/local/share/rustup/downloads \
+# Target-arch tool binaries compiled natively in the rust-tools stage;
+# copied here before 05-custom.sh runs so the symlink loop picks them up
+COPY --from=rust-tools /rust-tools/bin/ /usr/local/share/cargo/bin/
+
+RUN --mount=type=cache,id=rustup-downloads-${TARGETARCH},sharing=locked,target=/usr/local/share/rustup/downloads \
     --mount=type=cache,id=sccache-build-${TARGETARCH},sharing=locked,target=/root/.cache/sccache \
     echo "Running custom commands"; \
+  export RUSTC_WRAPPER=/usr/local/share/cargo/bin/sccache; \
+  export SCCACHE_DIR=/root/.cache/sccache; \
   if [ -f "/root/docker/setup/05-custom.sh" ];then echo "Running the custom script";/root/docker/setup/05-custom.sh||{ echo "Failed to execute /root/docker/setup/05-custom.sh" && exit 10; };echo "Done running the custom script";fi; \
   echo ""
 

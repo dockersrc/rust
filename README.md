@@ -283,9 +283,9 @@ Run miri with: `cargo +nightly miri test`
 | `sqlx-cli` | Compile-time SQL verification and migration runner for sqlx |
 | `sea-orm-cli` | Migration generator and entity scaffolder for SeaORM |
 
-These are installed with broadly compatible feature flags. Projects with
-unusual feature requirements may need to `cargo install` them again with
-project-specific flags.
+Both are built with `rustls` instead of `native-tls` (pure-Rust TLS stack,
+no OpenSSL dependency) and support postgres, mysql, and sqlite. Projects with
+unusual feature requirements may `cargo install` them again with different flags.
 
 ---
 
@@ -320,23 +320,24 @@ docker run --rm -v "$PWD:/app" \
   casjaysdev/rust:latest
 ```
 
-### Enable sccache compilation caching
+### sccache compilation caching (on by default)
 
-`sccache` is installed and `SCCACHE_DIR` is pre-configured to
-`/root/.cache/sccache`. It is **not** activated by default. Opt in
-per run with `-e RUSTC_WRAPPER=sccache`:
+`sccache` is installed and **active by default**. `RUSTC_WRAPPER=sccache` is
+set in `/etc/profile.d/rust.sh` so every login shell automatically routes
+`rustc` invocations through the cache. `SCCACHE_DIR` points to
+`/root/.cache/sccache`, which is declared as a Docker volume.
 
 ```shell
 docker run --rm -v "$PWD:/app" \
   -v rust-sccache:/root/.cache/sccache \
-  -e RUSTC_WRAPPER=sccache \
-  casjaysdev/rust:latest
+  casjaysdev/rust:latest cargo build --release
 ```
 
-With `RUSTC_WRAPPER=sccache`, sccache intercepts every `rustc` invocation and
-serves cached object files on cache hits, dramatically speeding up incremental
+Cache hits skip recompilation entirely, dramatically speeding up incremental
 and repeated builds. `CARGO_INCREMENTAL` is forced to `0` because cargo's own
 incremental compilation conflicts with sccache's shared cache.
+
+To opt out: `-e RUSTC_WRAPPER=`
 
 #### Remote sccache backends
 
@@ -356,20 +357,27 @@ docker run --rm -v "$PWD:/app" \
 
 ### BuildKit cache mounts (for image builds)
 
-The `Dockerfile` uses `--mount=type=cache` on both the package install and
-toolchain install steps. This keeps the apk index, cargo registry, rustup
-downloads, and sccache populated between `docker build` runs so rebuilding
-the image after a change does not re-download anything:
+The `Dockerfile` uses `--mount=type=cache` across all stages. This keeps the
+apk index, cargo registry, rustup downloads, and sccache populated between
+`docker build` runs so rebuilding after a change does not re-download or
+recompile anything:
 
 ```shell
 # BuildKit is the default since Docker 23; no flags needed
 docker build --tag casjaysdev/rust:local .
 ```
 
-Cache mount IDs: `apk-cache-<arch>`, `cargo-registry`, `cargo-git-<arch>`,
-`rustup-downloads-<arch>`, `sccache-build-<arch>` (where `<arch>` is
-`amd64` or `arm64` — per-arch IDs prevent cross-arch cache corruption in
-multi-platform builds).
+| Stage | Cache mount ID | Contents |
+|-------|----------------|----------|
+| `build` | `apk-cache-<arch>` | Alpine package index and downloaded APKs |
+| `build` | `rustup-downloads-<arch>` | rustup toolchain and component tarballs |
+| `build` | `sccache-build-<arch>` | sccache compiled-artifact cache for the build stage |
+| `rust-tools` | `cargo-registry-native` | Cargo registry index and crate tarballs (native) |
+| `rust-tools` | `cargo-git-native` | Cargo git dependencies (native) |
+| `rust-tools` | `sccache-native` | sccache cache for source-compiled tools in the native stage |
+
+`<arch>` is `amd64` or `arm64`. Per-arch IDs prevent cross-arch cache
+corruption in multi-platform builds.
 
 ---
 
@@ -381,8 +389,8 @@ multi-platform builds).
 | `RUSTUP_HOME` | `/usr/local/share/rustup` | Toolchains and components |
 | `RUSTUP_TOOLCHAIN` | `stable` | Default channel |
 | `SCCACHE_DIR` | `/root/.cache/sccache` | Local sccache storage directory |
-| `CARGO_INCREMENTAL` | `0` | Disabled — required when using sccache |
-| `RUSTC_WRAPPER` | *(unset)* | Set to `sccache` to activate compilation caching |
+| `CARGO_INCREMENTAL` | `0` | Disabled — conflicts with sccache shared cache |
+| `RUSTC_WRAPPER` | `sccache` | Active by default; set to empty string to disable |
 | `CARGO_WORKDIR` | *(unset)* | Override working directory for `rust-workflow` |
 | `CARGO_BUILD_TARGET` | *(unset)* | Cross-compile triple for `rust-workflow` |
 | `TZ` | `America/New_York` | Override at run time with `-e TZ=...` |
@@ -523,8 +531,34 @@ docker build --tag casjaysdev/rust:local .
 ```
 
 BuildKit is required (default in Docker 23+). Cache mounts keep subsequent
-builds fast — the cargo registry, rustup downloads, and sccache data persist
-in BuildKit's own cache layer storage.
+builds fast — cargo registry, rustup downloads, and sccache data persist in
+BuildKit's own cache layer storage.
+
+### Build architecture — native cross-compilation
+
+The `Dockerfile` uses the same `--platform=$BUILDPLATFORM` pattern as the
+Go image's `go-tools` stage. A dedicated `rust-tools` stage runs natively on
+the build host (always amd64 in CI) and cross-compiles or downloads all
+~50 Rust tool binaries for the target arch before the main build stage ever
+starts. This eliminates QEMU emulation for tool compilation:
+
+| How | What |
+|-----|------|
+| `cargo binstall --target <triple>` | Fetches prebuilt binaries from GitHub releases — no compilation |
+| `cargo install --target <triple>` | Source-compiles natively on amd64 via the `musl-cross` toolchain |
+| `sccache` (native x86_64) | Caches all source compilations across rebuilds |
+
+Tools with C dependencies use pure-Rust alternatives wherever possible:
+`rustls` instead of `native-tls`/OpenSSL (sqlx-cli, sea-orm-cli, trunk);
+bundled SQLite via `rusqlite`'s `bundled` feature. `probe-rs` (needs libusb)
+is best-effort: downloaded if a prebuilt exists, silently skipped otherwise.
+
+**Expected multi-arch build times:**
+
+| Arch | Before (QEMU) | After (native cross-compile) |
+|------|---------------|------------------------------|
+| `linux/amd64` | ~20 min | ~20 min |
+| `linux/arm64` | ~15 hours | ~30–60 min |
 
 ---
 

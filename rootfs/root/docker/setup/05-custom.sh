@@ -146,91 +146,10 @@ rustup target add \
   aarch64-linux-android
 
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-# Bootstrap cargo-binstall — downloads prebuilt binaries instead of
-# compiling every tool from source, cutting install time dramatically
-BINSTALL_ARCH="$(uname -m)"
-BINSTALL_URL="https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-${BINSTALL_ARCH}-unknown-linux-musl.tgz"
-curl -sSfL "$BINSTALL_URL" -o /tmp/cargo-binstall.tgz
-tar xzf /tmp/cargo-binstall.tgz -C /tmp cargo-binstall
-install -m 755 /tmp/cargo-binstall "$CARGO_HOME/bin/cargo-binstall"
-rm -f /tmp/cargo-binstall.tgz /tmp/cargo-binstall
-
-# - - - - - - - - - - - - - - - - - - - - - - - - -
-# Workflow and development tools — most have musl prebuilt binaries for amd64 and arm64;
-# || true lets the build continue if an individual tool has no prebuilt and source
-# compilation fails (e.g. missing a C dep); failures are visible in the build log
-cargo binstall -y \
-  cargo-edit \
-  cargo-watch \
-  cargo-update \
-  cargo-outdated \
-  cargo-expand \
-  cargo-info \
-  bacon \
-  cargo-llvm-cov \
-  cargo-tarpaulin \
-  cargo-audit \
-  cargo-deny \
-  cargo-machete \
-  cargo-semver-checks \
-  cargo-make \
-  cargo-deb \
-  cargo-generate \
-  cargo-release \
-  cargo-chef \
-  cargo-zigbuild \
-  just \
-  tokei \
-  hyperfine \
-  wasm-pack \
-  wasm-tools \
-  wasm-bindgen-cli \
-  cbindgen \
-  cargo-binutils \
-  cargo-bloat \
-  cargo-asm \
-  mdbook \
-  mdbook-toc \
-  sccache \
-  typos-cli \
-  taplo-cli \
-  cargo-sort \
-  cargo-hack \
-  cargo-criterion \
-  dprint \
-  cargo-careful \
-  cargo-public-api \
-  cargo-spellcheck \
-  cargo-geiger \
-  grcov || true
-
-# Tools that occasionally lack musl prebuilts — fall back to source compilation
-# cargo-nextest requires --locked when building from source (locked-tripwire guard)
-cargo binstall -y cargo-nextest 2>/dev/null || cargo install --locked cargo-nextest || true
-cargo binstall -y cargo-dist 2>/dev/null || cargo install cargo-dist || true
-cargo binstall -y cargo-msrv 2>/dev/null || cargo install cargo-msrv
-cargo binstall -y cargo-mutants 2>/dev/null || cargo install cargo-mutants
-cargo binstall -y flip-link 2>/dev/null || cargo install flip-link
-cargo binstall -y cargo-ndk 2>/dev/null || cargo install cargo-ndk
-cargo binstall -y trunk 2>/dev/null || cargo install trunk 2>/dev/null || true
-cargo binstall -y cargo-udeps 2>/dev/null || cargo install cargo-udeps || true
-cargo binstall -y cargo-fuzz 2>/dev/null || cargo install cargo-fuzz || true
-cargo binstall -y cargo-minimal-versions 2>/dev/null || cargo install cargo-minimal-versions || true
-
-# cross (the cross-rs cross-compilation runner)
-cargo binstall -y cross 2>/dev/null || cargo install cross 2>/dev/null || true
-
-# probe-rs requires the cli feature flag and is best built from source
-cargo install probe-rs --features cli 2>/dev/null || true
-
-# samply and cargo-flamegraph require a system perf or dtrace — best-effort
-cargo binstall -y samply 2>/dev/null || true
-cargo binstall -y flamegraph 2>/dev/null || cargo install flamegraph || true
-
-# sqlx-cli and sea-orm-cli need project-specific feature flags at runtime;
-# install a broadly compatible build here as a convenience
-cargo install sqlx-cli --no-default-features --features native-tls,postgres,mysql,sqlite 2>/dev/null || true
-cargo install sea-orm-cli 2>/dev/null || true
+# All Rust tool binaries (cargo-edit, cargo-deny, sqlx-cli, sea-orm-cli, probe-rs,
+# sccache, etc.) are compiled natively in the Dockerfile's rust-tools stage and
+# copied to $CARGO_HOME/bin before this script runs — no cargo install here.
+# The symlink loop below picks them all up.
 
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Linker configuration for cross-compilation targets.
@@ -292,6 +211,7 @@ export CARGO_HOME="${CARGO_HOME}"
 export RUSTUP_TOOLCHAIN="stable"
 export PATH="${CARGO_HOME}/bin:\${PATH}"
 export SCCACHE_DIR="\${SCCACHE_DIR:-/root/.cache/sccache}"
+export RUSTC_WRAPPER="\${RUSTC_WRAPPER:-sccache}"
 export CARGO_INCREMENTAL="\${CARGO_INCREMENTAL:-0}"
 PROFILE
 
