@@ -16,11 +16,11 @@ docker pull casjaysdev/rust:latest
 
 ---
 
-## ⚡ Default behavior
+## ⚡ rust-workflow
 
-Running the container with no arguments automatically executes
-**`rust-workflow`** — a four-step pipeline against the project mounted at
-`/app`:
+**`rust-workflow`** is a four-step pipeline included in the image. It must
+be called explicitly — running the container with no arguments starts it in
+monitoring mode, it does not execute `rust-workflow` automatically:
 
 ```
 fmt check  →  clippy -D warnings  →  cargo test --all  →  cargo build --release
@@ -30,7 +30,7 @@ fmt check  →  clippy -D warnings  →  cargo test --all  →  cargo build --re
 # run the full workflow against your project
 docker run --rm -it \
   -v "$PWD:/app" \
-  casjaysdev/rust:latest
+  casjaysdev/rust:latest rust-workflow
 ```
 
 Override the working directory with `CARGO_WORKDIR`, or target a specific
@@ -40,7 +40,7 @@ cross-compile triple with `CARGO_BUILD_TARGET`:
 docker run --rm -it \
   -v "$PWD:/app" \
   -e CARGO_BUILD_TARGET=aarch64-unknown-linux-musl \
-  casjaysdev/rust:latest
+  casjaysdev/rust:latest rust-workflow
 ```
 
 ---
@@ -366,8 +366,10 @@ the image after a change does not re-download anything:
 docker build --tag casjaysdev/rust:local .
 ```
 
-Cache mount IDs: `apk-cache`, `cargo-registry`, `cargo-git`,
-`rustup-downloads`, `sccache-build`.
+Cache mount IDs: `apk-cache-<arch>`, `cargo-registry`, `cargo-git-<arch>`,
+`rustup-downloads-<arch>`, `sccache-build-<arch>` (where `<arch>` is
+`amd64` or `arm64` — per-arch IDs prevent cross-arch cache corruption in
+multi-platform builds).
 
 ---
 
