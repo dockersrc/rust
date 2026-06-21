@@ -16,6 +16,35 @@ docker pull casjaysdev/rust:latest
 
 ---
 
+## 🚀 Install and run container
+
+```shell
+dockermgr update rust
+```
+
+Or manually:
+
+```shell
+dockerHome="/var/lib/srv/$USER/docker/casjaysdevdocker/rust/rust/latest/volumes"
+mkdir -p "$dockerHome"
+git clone "https://github.com/dockermgr/rust" "$HOME/.local/share/CasjaysDev/dockermgr/rust"
+cp -Rfva "$HOME/.local/share/CasjaysDev/dockermgr/rust/rootfs/." "$dockerHome/"
+docker run -d \
+  --restart always \
+  --privileged \
+  --name casjaysdevdocker-rust-latest \
+  --hostname rust \
+  -e TZ=${TIMEZONE:-America/New_York} \
+  -v "$dockerHome/data:/data:z" \
+  -v "$dockerHome/config:/config:z" \
+  -v rust-cargo:/usr/local/share/cargo \
+  -v rust-rustup:/usr/local/share/rustup \
+  -v rust-sccache:/root/.cache/sccache \
+  casjaysdev/rust:latest
+```
+
+---
+
 ## ⚡ rust-workflow
 
 **`rust-workflow`** is a four-step pipeline included in the image. It must
@@ -250,6 +279,7 @@ Run miri with: `cargo +nightly miri test`
 | `wasm-bindgen-cli` | Generate JS/TS bindings for Rust WASM modules |
 | `wasm-tools` | Low-level WASM binary toolkit — validate, transform, component model |
 | `trunk` | Rust/WASM bundler for web frontends — live-reload dev server |
+| `wasm-opt` (binaryen) | WASM binary optimiser — shrinks and speeds up `.wasm` output |
 
 ### Docs
 
@@ -419,7 +449,7 @@ Convenience symlinks so standard tools find their home:
 | Windows GNU | `x86_64-gnu`, `i686-gnu`, `aarch64-gnullvm` |
 | macOS | `x86_64-apple-darwin`, `aarch64-apple-darwin` |
 | BSD | `x86_64-unknown-freebsd` |
-| WASM | `wasm32-unknown-unknown`, `wasm32-wasip1`, `wasm32-wasip2`, `wasm32-emscripten` |
+| WASM | `wasm32-unknown-unknown`, `wasm32-wasip1`, `wasm32-wasip2`, `wasm32-unknown-emscripten` |
 | Embedded ARM | `thumbv6m-none-eabi`, `thumbv7em-none-eabihf`, `thumbv8m.main-none-eabi` |
 | Embedded RISC-V | `riscv32imc-unknown-none-elf`, `riscv32imac-unknown-none-elf` |
 | Android | `aarch64-linux-android` |
@@ -493,36 +523,7 @@ after a refactor rather than in the default CI path.
 
 ---
 
-## 🚀 Install and run container
-
-```shell
-dockermgr update rust
-```
-
-Or manually:
-
-```shell
-dockerHome="/var/lib/srv/$USER/docker/casjaysdevdocker/rust/rust/latest/volumes"
-mkdir -p "$dockerHome"
-git clone "https://github.com/dockermgr/rust" "$HOME/.local/share/CasjaysDev/dockermgr/rust"
-cp -Rfva "$HOME/.local/share/CasjaysDev/dockermgr/rust/rootfs/." "$dockerHome/"
-docker run -d \
-  --restart always \
-  --privileged \
-  --name casjaysdevdocker-rust-latest \
-  --hostname rust \
-  -e TZ=${TIMEZONE:-America/New_York} \
-  -v "$dockerHome/data:/data:z" \
-  -v "$dockerHome/config:/config:z" \
-  -v rust-cargo:/usr/local/share/cargo \
-  -v rust-rustup:/usr/local/share/rustup \
-  -v rust-sccache:/root/.cache/sccache \
-  casjaysdev/rust:latest
-```
-
----
-
-## 🛠️ Build the image locally
+## 🛠️ Development
 
 ```shell
 git clone "https://github.com/dockersrc/rust" "$HOME/Projects/github/dockersrc/rust"
