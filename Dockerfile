@@ -40,15 +40,11 @@ FROM tianon/gosu:latest AS gosu
 FROM --platform=$BUILDPLATFORM rust:alpine AS rust-tools
 ARG TARGETARCH
 
-# Force IPv4 for all curl calls — IPv6 routing on this host intercepts
-# *.github.com and presents a cert for a local domain, causing SSL SAN mismatch
-RUN printf -- '-4\n' > /root/.curlrc
-
 # zig acts as a universal C/C++ cross-compiler — ships with bundled musl headers
 # and stdlib for all targets, so no separate musl-cross toolchain is needed.
 # Wrapper scripts named aarch64-linux-musl-{gcc,g++,ar} let the CARGO_TARGET_*
 # env vars below work without any changes.
-RUN apk add --no-cache curl jq zig \
+RUN apk add --no-cache zig \
     && printf '#!/bin/sh\nexec zig cc -target aarch64-linux-musl "$@"\n' \
          > /usr/local/bin/aarch64-linux-musl-gcc \
     && printf '#!/bin/sh\nexec zig c++ -target aarch64-linux-musl "$@"\n' \
@@ -75,20 +71,10 @@ ENV CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc
 ENV CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++
 ENV AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar
 
-# Install native (x86_64) sccache to /usr/local/bin for use as RUSTC_WRAPPER
-# during this stage; kept separate from the target-arch sccache in /rust-tools/bin
-RUN set -e; \
-    SCCACHE_VER="$(curl -fsSL https://api.github.com/repos/mozilla/sccache/releases/latest | jq -r '.tag_name')"; \
-    SCCACHE_ASSET="sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl"; \
-    curl -fsSL "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VER}/${SCCACHE_ASSET}.tar.gz" \
-      | tar xz -C /tmp; \
-    install -m 755 "/tmp/${SCCACHE_ASSET}/sccache" /usr/local/bin/sccache; \
-    rm -rf "/tmp/${SCCACHE_ASSET}"
-
-# Bootstrap native (x86_64) cargo-binstall
-RUN curl -fsSL "https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz" \
-    | tar xz -C /usr/local/cargo/bin cargo-binstall && \
-    chmod 755 /usr/local/cargo/bin/cargo-binstall
+# Bootstrap cargo-binstall via cargo install — avoids system curl's SSL issues.
+# Cargo uses its own bundled TLS stack (not affected by the host SSL intercept
+# that blocks curl to *.github.com). Layer cache absorbs the one-time compile cost.
+RUN cargo install cargo-binstall
 
 # All tool binaries land in /rust-tools/bin — cleanly separate from rustup shims
 RUN mkdir -p /rust-tools/bin
@@ -100,11 +86,8 @@ ENV CARGO_INSTALL_ROOT=/rust-tools
 # Prebuilts are downloaded directly; source fallbacks cross-compile on amd64.
 RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git-native,sharing=locked,target=/usr/local/cargo/git \
-    --mount=type=cache,id=sccache-native,sharing=locked,target=/root/.cache/sccache \
     set -o pipefail; \
     RUST_TARGET="$(cat /tmp/rust-target)"; \
-    export RUSTC_WRAPPER=/usr/local/bin/sccache; \
-    export SCCACHE_DIR=/root/.cache/sccache; \
     cargo binstall -y --target "${RUST_TARGET}" \
       cargo-edit \
       cargo-watch \
