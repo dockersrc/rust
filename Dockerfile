@@ -40,10 +40,20 @@ FROM tianon/gosu:latest AS gosu
 FROM --platform=$BUILDPLATFORM rust:alpine AS rust-tools
 ARG TARGETARCH
 
-# musl-cross provides aarch64-linux-musl-gcc for arm64 cross-compilation;
-# it lives in the Alpine community repo which rust:alpine does not enable by default
-RUN apk add --no-cache curl jq \
-    && apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/edge/community musl-cross
+# zig acts as a universal C/C++ cross-compiler — ships with bundled musl headers
+# and stdlib for all targets, so no separate musl-cross toolchain is needed.
+# Wrapper scripts named aarch64-linux-musl-{gcc,g++,ar} let the CARGO_TARGET_*
+# env vars below work without any changes.
+RUN apk add --no-cache curl jq zig \
+    && printf '#!/bin/sh\nexec zig cc -target aarch64-linux-musl "$@"\n' \
+         > /usr/local/bin/aarch64-linux-musl-gcc \
+    && printf '#!/bin/sh\nexec zig c++ -target aarch64-linux-musl "$@"\n' \
+         > /usr/local/bin/aarch64-linux-musl-g++ \
+    && printf '#!/bin/sh\nexec zig ar "$@"\n' \
+         > /usr/local/bin/aarch64-linux-musl-ar \
+    && chmod +x /usr/local/bin/aarch64-linux-musl-gcc \
+                /usr/local/bin/aarch64-linux-musl-g++ \
+                /usr/local/bin/aarch64-linux-musl-ar
 
 # Resolve Docker TARGETARCH → Rust target triple
 RUN case "${TARGETARCH}" in \
