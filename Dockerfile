@@ -94,7 +94,6 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       cargo-update \
       cargo-outdated \
       cargo-expand \
-      cargo-info \
       bacon \
       cargo-llvm-cov \
       cargo-tarpaulin \
@@ -120,7 +119,6 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       cargo-asm \
       mdbook \
       mdbook-toc \
-      sccache \
       typos-cli \
       taplo-cli \
       cargo-sort \
@@ -132,6 +130,7 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       cargo-spellcheck \
       cargo-geiger \
       grcov || true; \
+    cargo binstall -y --target "${RUST_TARGET}" sccache 2>/dev/null || true; \
     cargo binstall -y --target "${RUST_TARGET}" cargo-nextest 2>/dev/null || \
       cargo install --locked --target "${RUST_TARGET}" cargo-nextest || true; \
     cargo binstall -y --target "${RUST_TARGET}" cargo-dist 2>/dev/null || \

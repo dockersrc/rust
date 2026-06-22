@@ -210,8 +210,10 @@ export RUSTUP_HOME="${RUSTUP_HOME}"
 export CARGO_HOME="${CARGO_HOME}"
 export RUSTUP_TOOLCHAIN="stable"
 export PATH="${CARGO_HOME}/bin:\${PATH}"
-export SCCACHE_DIR="\${SCCACHE_DIR:-/root/.cache/sccache}"
-export RUSTC_WRAPPER="\${RUSTC_WRAPPER:-sccache}"
+if command -v sccache > /dev/null 2>&1; then
+  export SCCACHE_DIR="\${SCCACHE_DIR:-/root/.cache/sccache}"
+  export RUSTC_WRAPPER="\${RUSTC_WRAPPER:-sccache}"
+fi
 export CARGO_INCREMENTAL="\${CARGO_INCREMENTAL:-0}"
 PROFILE
 
