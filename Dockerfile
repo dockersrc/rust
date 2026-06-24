@@ -156,11 +156,9 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
     cargo binstall -y --target "${RUST_TARGET}" samply 2>/dev/null || true; \
     cargo binstall -y --target "${RUST_TARGET}" flamegraph 2>/dev/null || \
       cargo install --target "${RUST_TARGET}" flamegraph || true; \
-    cargo install --target "${RUST_TARGET}" probe-rs --features cli 2>/dev/null || true; \
-    cargo install --target "${RUST_TARGET}" sqlx-cli \
-      --no-default-features --features rustls,postgres,mysql,sqlite 2>/dev/null || true; \
-    cargo install --target "${RUST_TARGET}" sea-orm-cli \
-      --no-default-features --features codegen,sqlx-mysql,sqlx-postgres,sqlx-sqlite,runtime-tokio-rustls 2>/dev/null || true
+    cargo binstall -y --target "${RUST_TARGET}" probe-rs 2>/dev/null || true; \
+    cargo binstall -y --target "${RUST_TARGET}" sqlx-cli 2>/dev/null || true; \
+    cargo binstall -y --target "${RUST_TARGET}" sea-orm-cli 2>/dev/null || true
 
 FROM ${PULL_URL}:${DISTRO_VERSION} AS build
 ARG TZ
