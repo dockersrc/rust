@@ -968,26 +968,11 @@ __create_env_file() {
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __exec_command() {
-  local arg=("$@")
   local exitCode=0
-  local cmdExec="${arg:-}"
-  local pre_exec="--login -c"
-  local shell bin prog
-  shell=$(type -P bash || type -P dash || type -P ash || type -P sh) 2>/dev/null
-  bin="${arg[0]:-bash}"
-  prog="$(type -P "$bin" 2>/dev/null || echo "$bin")"
-  if type -t "$bin" &>/dev/null; then
-    echo "${exec_message:-Executing command: $cmdExec}"
-    "$shell" $pre_exec "$cmdExec"
-    exitCode=$?
-  elif [ -f "$prog" ]; then
-    echo "$prog is not executable"
-    exitCode=98
-  else
-    echo "$prog does not exist"
-    exitCode=99
+  if [ $# -eq 0 ]; then
+    exec bash -l
   fi
-  return $exitCode
+  exec "$@"
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Setup the server init scripts
