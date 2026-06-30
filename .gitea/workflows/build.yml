@@ -59,6 +59,8 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ${{ steps.meta.outputs.registry_host }}/${{ github.repository }}:${{ steps.meta.outputs.tag_yymm }}
             ${{ vars.DOCKER_USERNAME != '' && format('{0}/{1}:{2}', vars.DOCKER_ORG || vars.DOCKER_USERNAME, github.event.repository.name, steps.meta.outputs.tag_yymm) || '' }}

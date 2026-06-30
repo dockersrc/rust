@@ -82,21 +82,25 @@ RUN mkdir -p /rust-tools/bin
 # CARGO_INSTALL_ROOT routes both `cargo install` and `cargo binstall` to /rust-tools/bin
 ENV CARGO_INSTALL_ROOT=/rust-tools
 
-# Install all Rust tools for the target arch with the native build cache active.
-# Prebuilts are downloaded directly; source fallbacks cross-compile on amd64.
+# Install all Rust tools for the target arch — prebuilt binaries ONLY, no source fallback.
+# Tools without prebuilts for the target arch are silently skipped (exit 0).
+# This cuts arm64 build time from hours to minutes.
 RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git-native,sharing=locked,target=/usr/local/cargo/git \
     set -o pipefail; \
     RUST_TARGET="$(cat /tmp/rust-target)"; \
-    cargo binstall -y --target "${RUST_TARGET}" \
+    # Disable telemetry prompt — required for non-interactive builds
+    mkdir -p /usr/local/cargo && echo 'disable-telemetry = true' > /usr/local/cargo/binstall.toml; \
+    BINSTALL="cargo binstall -y --disable-strategies compile --target ${RUST_TARGET}"; \
+    # Core tools — most have prebuilts for both amd64 and arm64
+    $BINSTALL \
+      cargo-binstall \
       cargo-edit \
       cargo-watch \
       cargo-update \
       cargo-outdated \
       cargo-expand \
       bacon \
-      cargo-llvm-cov \
-      cargo-tarpaulin \
       cargo-audit \
       cargo-deny \
       cargo-machete \
@@ -107,9 +111,23 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       cargo-release \
       cargo-chef \
       cargo-zigbuild \
+      cargo-nextest \
       just \
       tokei \
       hyperfine \
+      sccache \
+      mdbook \
+      mdbook-toc \
+      typos-cli \
+      taplo-cli \
+      cargo-sort \
+      cargo-hack \
+      dprint \
+      grcov || true; \
+    # Secondary tools — may or may not have prebuilts
+    $BINSTALL \
+      cargo-llvm-cov \
+      cargo-tarpaulin \
       wasm-pack \
       wasm-tools \
       wasm-bindgen-cli \
@@ -117,48 +135,26 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       cargo-binutils \
       cargo-bloat \
       cargo-asm \
-      mdbook \
-      mdbook-toc \
-      typos-cli \
-      taplo-cli \
-      cargo-sort \
-      cargo-hack \
       cargo-criterion \
-      dprint \
       cargo-careful \
       cargo-public-api \
       cargo-spellcheck \
       cargo-geiger \
-      grcov || true; \
-    cargo binstall -y --target "${RUST_TARGET}" sccache 2>/dev/null || true; \
-    cargo binstall -y --target "${RUST_TARGET}" cargo-nextest 2>/dev/null || \
-      cargo install --locked --target "${RUST_TARGET}" cargo-nextest || true; \
-    cargo binstall -y --target "${RUST_TARGET}" cargo-dist 2>/dev/null || \
-      cargo install --target "${RUST_TARGET}" cargo-dist || true; \
-    cargo binstall -y --target "${RUST_TARGET}" cargo-msrv 2>/dev/null || \
-      cargo install --target "${RUST_TARGET}" cargo-msrv; \
-    cargo binstall -y --target "${RUST_TARGET}" cargo-mutants 2>/dev/null || \
-      cargo install --target "${RUST_TARGET}" cargo-mutants; \
-    cargo binstall -y --target "${RUST_TARGET}" flip-link 2>/dev/null || \
-      cargo install --target "${RUST_TARGET}" flip-link; \
-    cargo binstall -y --target "${RUST_TARGET}" cargo-ndk 2>/dev/null || \
-      cargo install --target "${RUST_TARGET}" cargo-ndk; \
-    cargo binstall -y --target "${RUST_TARGET}" trunk 2>/dev/null || \
-      cargo install --target "${RUST_TARGET}" trunk 2>/dev/null || true; \
-    cargo binstall -y --target "${RUST_TARGET}" cargo-udeps 2>/dev/null || \
-      cargo install --target "${RUST_TARGET}" cargo-udeps || true; \
-    cargo binstall -y --target "${RUST_TARGET}" cargo-fuzz 2>/dev/null || \
-      cargo install --target "${RUST_TARGET}" cargo-fuzz || true; \
-    cargo binstall -y --target "${RUST_TARGET}" cargo-minimal-versions 2>/dev/null || \
-      cargo install --target "${RUST_TARGET}" cargo-minimal-versions || true; \
-    cargo binstall -y --target "${RUST_TARGET}" cross 2>/dev/null || \
-      cargo install --target "${RUST_TARGET}" cross 2>/dev/null || true; \
-    cargo binstall -y --target "${RUST_TARGET}" samply 2>/dev/null || true; \
-    cargo binstall -y --target "${RUST_TARGET}" flamegraph 2>/dev/null || \
-      cargo install --target "${RUST_TARGET}" flamegraph || true; \
-    cargo binstall -y --target "${RUST_TARGET}" probe-rs 2>/dev/null || true; \
-    cargo binstall -y --target "${RUST_TARGET}" sqlx-cli 2>/dev/null || true; \
-    cargo binstall -y --target "${RUST_TARGET}" sea-orm-cli 2>/dev/null || true
+      cargo-dist \
+      cargo-msrv \
+      cargo-mutants \
+      flip-link \
+      cargo-ndk \
+      trunk \
+      cargo-udeps \
+      cargo-fuzz \
+      cargo-minimal-versions \
+      cross \
+      samply \
+      flamegraph \
+      probe-rs \
+      sqlx-cli \
+      sea-orm-cli || true
 
 FROM ${PULL_URL}:${DISTRO_VERSION} AS build
 ARG TZ
