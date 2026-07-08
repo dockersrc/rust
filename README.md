@@ -402,9 +402,8 @@ docker build --tag casjaysdev/rust:local .
 | `build` | `apk-cache-<arch>` | Alpine package index and downloaded APKs |
 | `build` | `rustup-downloads-<arch>` | rustup toolchain and component tarballs |
 | `build` | `sccache-build-<arch>` | sccache compiled-artifact cache for the build stage |
-| `rust-tools` | `cargo-registry-native` | Cargo registry index and crate tarballs (native) |
-| `rust-tools` | `cargo-git-native` | Cargo git dependencies (native) |
-| `rust-tools` | `sccache-native` | sccache cache for source-compiled tools in the native stage |
+| `rust-tools` | `cargo-registry-native` | Cargo registry index (for cargo-binstall metadata) |
+| `rust-tools` | `cargo-git-native` | Cargo git dependencies |
 
 `<arch>` is `amd64` or `arm64`. Per-arch IDs prevent cross-arch cache
 corruption in multi-platform builds.
@@ -539,27 +538,29 @@ BuildKit's own cache layer storage.
 
 The `Dockerfile` uses the same `--platform=$BUILDPLATFORM` pattern as the
 Go image's `go-tools` stage. A dedicated `rust-tools` stage runs natively on
-the build host (always amd64 in CI) and cross-compiles or downloads all
-~50 Rust tool binaries for the target arch before the main build stage ever
-starts. This eliminates QEMU emulation for tool compilation:
+the build host (always amd64 in CI) and downloads prebuilt tool binaries for
+the target arch before the main build stage ever starts. This eliminates
+QEMU emulation entirely for tool installation:
 
 | How | What |
 |-----|------|
-| `cargo binstall --target <triple>` | Fetches prebuilt binaries from GitHub releases — no compilation |
-| `cargo install --target <triple>` | Source-compiles natively on amd64 via the `musl-cross` toolchain |
-| `sccache` (native x86_64) | Caches all source compilations across rebuilds |
+| `cargo binstall --disable-strategies compile` | Fetches prebuilt binaries from GitHub releases — no compilation, tools without prebuilts are skipped |
 
 Tools with C dependencies use pure-Rust alternatives wherever possible:
 `rustls` instead of `native-tls`/OpenSSL (sqlx-cli, sea-orm-cli, trunk);
-bundled SQLite via `rusqlite`'s `bundled` feature. `probe-rs` (needs libusb)
-is best-effort: downloaded if a prebuilt exists, silently skipped otherwise.
+bundled SQLite via `rusqlite`'s `bundled` feature.
+
+**Note:** Some tools may be missing on `linux/arm64` if no prebuilt binary
+exists for that architecture. Core tools (`just`, `cargo-nextest`, `sccache`,
+`cargo-audit`, `cargo-deny`, `hyperfine`, `mdbook`, `dprint`, etc.) have
+arm64 prebuilts; niche tools may be amd64-only.
 
 **Expected multi-arch build times:**
 
-| Arch | Before (QEMU) | After (native cross-compile) |
-|------|---------------|------------------------------|
-| `linux/amd64` | ~20 min | ~20 min |
-| `linux/arm64` | ~15 hours | ~30–60 min |
+| Arch | Before (QEMU) | After (prebuilt-only) |
+|------|---------------|------------------------|
+| `linux/amd64` | ~20 min | ~10–15 min |
+| `linux/arm64` | ~15 hours | ~5–15 min |
 
 ---
 
