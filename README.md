@@ -25,7 +25,7 @@ dockermgr update rust
 Or manually:
 
 ```shell
-dockerHome="/var/lib/srv/$USER/docker/casjaysdevdocker/rust/rust/latest/volumes"
+dockerHome="/srv/$USER/docker/casjaysdevdocker/rust/rust/latest/volumes"
 mkdir -p "$dockerHome"
 git clone "https://github.com/dockermgr/rust" "$HOME/.local/share/CasjaysDev/dockermgr/rust"
 cp -Rfva "$HOME/.local/share/CasjaysDev/dockermgr/rust/rootfs/." "$dockerHome/"
