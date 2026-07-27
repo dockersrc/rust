@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202606261500-git
+##@Version           :  202607082023-git
 # @@Author           :  Jason Hempstead
 # @@Contact          :  jason@casjaysdev.pro
 # @@License          :  WTFPL
 # @@ReadME           :  entrypoint.sh --help
 # @@Copyright        :  Copyright: (c) 2026 Jason Hempstead, Casjays Developments
-# @@Created          :  Friday, Jun 05, 2026 18:22 EDT
+# @@Created          :  Monday, Jul 27, 2026 13:18 EDT
 # @@File             :  entrypoint.sh
-# @@Description      :  Entrypoint file for alpine
+# @@Description      :  Entrypoint file for rust
 # @@Changelog        :  New script
 # @@TODO             :  Better documentation
 # @@Other            :  
@@ -39,7 +39,7 @@ PATH="/usr/local/etc/docker/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin"
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Set bash options
 SCRIPT_FILE="$0"
-CONTAINER_NAME="alpine"
+CONTAINER_NAME="rust"
 SCRIPT_NAME="${SCRIPT_FILE##*/}"
 CONTAINER_NAME="${ENV_CONTAINER_NAME:-$CONTAINER_NAME}"
 # - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -95,8 +95,8 @@ SERVICE_UID="${SERVICE_UID:-0}"
 SERVICE_GID="${SERVICE_GID:-0}"
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # User and group in which the service switches to - IE: nginx,apache,mysql,postgres
-#SERVICE_USER="${SERVICE_USER:-alpine}"   # execute command as another user
-#SERVICE_GROUP="${SERVICE_GROUP:-alpine}" # Set the service group
+#SERVICE_USER="${SERVICE_USER:-rust}"   # execute command as another user
+#SERVICE_GROUP="${SERVICE_GROUP:-rust}" # Set the service group
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Secondary ports
 # specifiy other ports
@@ -123,7 +123,7 @@ export PATH RUNAS_USER SERVICE_USER SERVICE_GROUP SERVICE_UID SERVICE_GID WWW_RO
 # show message
 __run_message() {
 
-  return
+  return 0
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 ################## END OF CONFIGURATION #####################
@@ -291,7 +291,7 @@ fi
 if [ "$ENTRYPOINT_FIRST_RUN" != "no" ]; then
   if [ "$CONFIG_DIR_INITIALIZED" = "no" ] || [ "$DATA_DIR_INITIALIZED" = "no" ]; then
     if [ "$ENTRYPOINT_MESSAGE" = "yes" ]; then
-      echo "Executing entrypoint script for alpine"
+      echo "Executing entrypoint script for rust"
     fi
   fi
   # - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -370,7 +370,7 @@ if [ "$ENTRYPOINT_FIRST_RUN" != "no" ]; then
   # - - - - - - - - - - - - - - - - - - - - - - - - -
   # import hosts file into container
   if [ -f "/usr/local/etc/hosts" ] && [ "$UPDATE_FILE_HOSTS" = "yes" ]; then
-    grep -vF "$HOSTNAME" "/usr/local/etc/hosts" 2>/dev/null >>"/etc/hosts" || true
+    grep -vF -- "$HOSTNAME" "/usr/local/etc/hosts" 2>/dev/null >>"/etc/hosts" || true
   fi
   # - - - - - - - - - - - - - - - - - - - - - - - - -
   # import resolv.conf file into container
@@ -422,7 +422,7 @@ if [ "$ENTRYPOINT_FIRST_RUN" != "no" ] || [ "$CONFIG_DIR_INITIALIZED" = "no" ] |
     echo "Initialized on: $INIT_DATE" >"$ENTRYPOINT_INIT_FILE" 2>/dev/null || true
   fi
   # - - - - - - - - - - - - - - - - - - - - - - - - -
-  # setup the smtp server — non-fatal; this image does not use ssmtp
+  # setup the smtp server
   __setup_mta || true
   # - - - - - - - - - - - - - - - - - - - - - - - - -
   ENTRYPOINT_FIRST_RUN="no"
@@ -576,7 +576,7 @@ healthcheck)
         services+="$name "
       done
     fi
-    services="$(printf '%s\n' $services | sort -u | grep -v '^$')"
+    services="$(printf '%s\n' $services | sort -u | grep -v -- '^$')"
     for proc in $services; do
       if [ -n "$proc" ]; then
         if ! __pgrep "$proc"; then
@@ -587,7 +587,7 @@ healthcheck)
     done
     for port in $healthPorts; do
       if command -v netstat &>/dev/null && [ -n "$port" ]; then
-        if ! netstat -taupln | grep -q ":$port "; then
+        if ! netstat -taupln | grep -q -- ":$port "; then
           echo "$port isn't open" >&2
           healthStatus=$((healthStatus + 1))
         fi
@@ -617,20 +617,24 @@ ports)
   # show running processes
 procs)
   shift 1
-  ps="$(__ps axco command 2>/dev/null | grep -vE '^(COMMAND|grep|ps)$' | sort -u)"
+  ps="$(__ps axco command 2>/dev/null | grep -vE -- '^(COMMAND|grep|ps)$' | sort -u)"
   [ -n "$ps" ] && printf '%s\n%s\n' "Found the following processes" "$ps" | tr '\n' ' '
   exit $?
   ;;
 # Launch shell
 */bin/sh | */bin/bash | bash | sh | shell)
   shift 1
-  __exec_command "${@:-/bin/bash -l}"
+  __exec_command "$@"
   exit $?
   ;;
 # execute commands
 exec)
   shift 1
-  __exec_command "${@:-echo "No commands given"}"
+  if [ $# -eq 0 ]; then
+    echo "No command given to exec" >&2
+    exit 1
+  fi
+  __exec_command "$@"
   exit $?
   ;;
 # show/start init scripts

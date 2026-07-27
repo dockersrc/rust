@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202605311104-git
+##@Version           :  202607271318-git
 # @@Author           :  CasjaysDev
 # @@Contact          :  CasjaysDev <docker-admin@casjaysdev.pro>
-# @@License          :  MIT
+# @@License          :  WTFPL
 # @@Copyright        :  Copyright 2026 CasjaysDev
-# @@Created          :  Sun May 31 11:04:52 AM EDT 2026
+# @@Created          :  Mon Jul 27 01:18:36 PM EDT 2026
 # @@File             :  07-cleanup.sh
 # @@Description      :  script to run cleanup
 # @@Changelog        :  newScript
@@ -20,7 +20,7 @@
 # shellcheck disable=SC1001,SC1003,SC2001,SC2003,SC2016,SC2031,SC2090,SC2115,SC2120,SC2155,SC2199,SC2229,SC2317,SC2329
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Set bash options
-set -o pipefail
+set -eo pipefail
 [ "$DEBUGGER" = "on" ] && echo "Enabling debugging" && set -x$DEBUGGER_OPTIONS
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Load functions

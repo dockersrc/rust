@@ -6,10 +6,6 @@ ARG BUILD_DATE="202605311109"
 ARG LANGUAGE="en_US.UTF-8"
 ARG TIMEZONE="America/New_York"
 ARG WWW_ROOT_DIR="/usr/local/share/httpd/default"
-ARG DEFAULT_FILE_DIR="/usr/local/share/template-files"
-ARG DEFAULT_DATA_DIR="/usr/local/share/template-files/data"
-ARG DEFAULT_CONF_DIR="/usr/local/share/template-files/config"
-ARG DEFAULT_TEMPLATE_DIR="/usr/local/share/template-files/defaults"
 ARG PATH="/usr/local/etc/docker/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 ARG USER="root"
@@ -170,10 +166,6 @@ ARG EXPOSE_PORTS
 ARG BUILD_VERSION
 ARG IMAGE_VERSION
 ARG WWW_ROOT_DIR
-ARG DEFAULT_FILE_DIR
-ARG DEFAULT_DATA_DIR
-ARG DEFAULT_CONF_DIR
-ARG DEFAULT_TEMPLATE_DIR
 ARG DISTRO_VERSION
 ARG NODE_VERSION
 ARG NODE_MANAGER
@@ -183,7 +175,7 @@ ARG SHELL_OPTS
 ARG PATH
 ARG TARGETARCH
 
-ARG PACK_LIST="bash tini bash-completion git curl wget sudo unzip iproute2 openrc ssmtp openssl jq tzdata mailcap ncurses util-linux pciutils usbutils coreutils binutils findutils grep rsync zip py3-pip procps net-tools sed gawk attr readline lsof less shadow ca-certificates "
+ARG PACK_LIST="bash tini bash-completion git curl wget sudo unzip iproute2 openrc msmtp openssl jq tzdata mailcap ncurses util-linux pciutils usbutils coreutils binutils findutils grep rsync zip py3-pip procps net-tools sed gawk attr readline lsof less shadow ca-certificates "
 
 ENV ENV=~/.profile
 ENV SHELL="/bin/sh"
@@ -214,7 +206,7 @@ COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
 
 RUN echo "Initializing the system"; \
   $SHELL_OPTS; \
-  mkdir -p "${DEFAULT_DATA_DIR}" "${DEFAULT_CONF_DIR}" "${DEFAULT_TEMPLATE_DIR}" "/root/docker/setup" "/etc/profile.d"; \
+  mkdir -p "/root/docker/setup" "/etc/profile.d"; \
   if [ -f "/root/docker/setup/00-init.sh" ];then echo "Running the init script";/root/docker/setup/00-init.sh||{ echo "Failed to execute /root/docker/setup/00-init.sh" >&2 && exit 10; };echo "Done running the init script";fi; \
   echo ""
 
@@ -332,10 +324,6 @@ ARG BUILD_VERSION
 ARG IMAGE_VERSION
 ARG GIT_COMMIT
 ARG WWW_ROOT_DIR
-ARG DEFAULT_FILE_DIR
-ARG DEFAULT_DATA_DIR
-ARG DEFAULT_CONF_DIR
-ARG DEFAULT_TEMPLATE_DIR
 ARG DISTRO_VERSION
 ARG NODE_VERSION
 ARG NODE_MANAGER
@@ -357,10 +345,10 @@ LABEL org.opencontainers.image.authors="${LICENSE}"
 LABEL org.opencontainers.image.created="${BUILD_DATE}"
 LABEL org.opencontainers.image.version="${BUILD_VERSION}"
 LABEL org.opencontainers.image.schema-version="${BUILD_VERSION}"
-LABEL org.opencontainers.image.url="https://hub.docker.com/r/casjaysdev/rust"
+LABEL org.opencontainers.image.url="https://docker.io/casjaysdev/rust"
 LABEL org.opencontainers.image.vcs-type="Git"
 LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
-LABEL org.opencontainers.image.source="https://github.com/dockersrc/rust"
+LABEL org.opencontainers.image.source="https://docker.io/casjaysdev/rust"
 LABEL org.opencontainers.image.documentation="https://github.com/dockersrc/rust"
 LABEL com.github.containers.toolbox="false"
 

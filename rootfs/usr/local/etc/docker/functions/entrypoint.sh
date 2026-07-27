@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202606261430-git
+##@Version           :  202607082330-git
 # @@Author           :  Jason Hempstead
 # @@Contact          :  git-admin@casjaysdev.pro
 # @@License          :  LICENSE.md
@@ -93,7 +93,11 @@ __is_in_file() { [ -e "$2" ] && grep -Rsq "$1" "$2" 2>/dev/null; }
 __curl() { curl -q -sfI --max-time 3 -k -o /dev/null "$@" 2>/dev/null || return 10; }
 __find() {
   local result
-  result=$(find "$1" -mindepth 1 -type "${2:-f,d}" 2>/dev/null)
+  if [ -n "$2" ]; then
+    result=$(find "$1" -mindepth 1 -type "$2" 2>/dev/null)
+  else
+    result=$(find "$1" -mindepth 1 \( -type f -o -type d \) 2>/dev/null)
+  fi
   [ -n "$result" ] || return 10
   printf '%s\n' "$result"
 }
@@ -371,17 +375,23 @@ __init_working_dir() {
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __exec_service() {
   local count=6
+  local bgpid
   [ "$DEBUGGER" = "on" ] && echo "Starting $1"
-  eval "$@" 2>>/dev/stderr >>/data/logs/start.log &
+  eval "$@" &
+  bgpid=$!
   while [ $count -ne 0 ]; do
     sleep 3
+    if ! kill -0 "$bgpid" 2>/dev/null; then
+      wait "$bgpid"
+      return $?
+    fi
     if __pgrep "$1"; then
       touch "/run/init.d/$1.pid"
-      break
-    else
-      count=$((count - 1))
+      return 0
     fi
+    count=$((count - 1))
   done
+  return 1
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __update_ssl_certs() {
@@ -791,26 +801,24 @@ __proc_check() {
 
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __set_user_group_id() {
-  local exitStatus=0
   local set_user="${1:-$SERVICE_USER}"
   local set_uid="${2:-${SERVICE_UID:-1000}}"
   local set_gid="${3:-${SERVICE_GID:-1000}}"
-  local random_id="$(__generate_random_uids)"
-  set_uid="$(__get_uid "$set_user" || echo "$set_uid")"
-  set_gid="$(__get_gid "$set_user" || echo "$set_gid")"
-  if ! grep -shq "^$set_user:" "/etc/passwd" "/etc/group"; then
-    return 0
-  fi
+  # Nothing to do for root or unset
   if [ -z "$set_user" ] || [ "$set_user" = "root" ]; then
     return 0
   fi
-  if grep -shq "^$set_user:" "/etc/passwd" "/etc/group"; then
-    if __check_for_guid "$set_gid"; then
-      groupmod -g "${set_gid}" $set_user 2>/dev/stderr | tee -p -a "/data/logs/init.txt" >/dev/null
-    fi
-    if __check_for_uid "$set_uid"; then
-      usermod -u "${set_uid}" -g "${set_gid}" $set_user 2>/dev/stderr | tee -p -a "/data/logs/init.txt" >/dev/null
-    fi
+  # Nothing to do if the user does not exist yet
+  if ! grep -shq "^$set_user:" "/etc/passwd" "/etc/group"; then
+    return 0
+  fi
+  set_uid="$(__get_uid "$set_user" || echo "$set_uid")"
+  set_gid="$(__get_gid "$set_user" || echo "$set_gid")"
+  if __check_for_guid "$set_gid"; then
+    groupmod -g "${set_gid}" "$set_user" 2>/dev/stderr | tee -a "/data/logs/init.txt" >/dev/null
+  fi
+  if __check_for_uid "$set_uid"; then
+    usermod -u "${set_uid}" -g "${set_gid}" "$set_user" 2>/dev/stderr | tee -a "/data/logs/init.txt" >/dev/null
   fi
   export SERVICE_UID="$set_uid"
   export SERVICE_GID="$set_gid"
@@ -826,15 +834,14 @@ __create_service_user() {
   local create_uid="${4:-${SERVICE_UID:-$USER_UID}}"
   local create_gid="${5:-${SERVICE_GID:-$USER_GID}}"
   local random_id="$(__generate_random_uids)"
-  local create_home_dir="${create_home_dir:-/home/$create_user}"
   local log_file="/data/logs/init.txt"
-  # Ensure log directory exists
-  [ -d "$(dirname "$log_file")" ] || mkdir -p "$(dirname "$log_file")" 2>/dev/null
-  # Validate that we have at least a user or group to create
-  if [ -z "$create_user" ] && [ -z "$create_group" ]; then
-    echo "No user or group specified to create" >&2
+  # Nothing to do for unset or root user — return silently
+  create_home_dir="${create_home_dir:-/home/$create_user}"
+  if [ -z "$create_user" ] || [ "$create_user" = "root" ]; then
     return 0
   fi
+  # Ensure log directory exists
+  [ -d "$(dirname "$log_file")" ] || mkdir -p "$(dirname "$log_file")" 2>/dev/null
   # Validate user/group name format (alphanumeric, underscore, hyphen; must start with letter or underscore)
   if [ -n "$create_user" ] && [[ ! "$create_user" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
     echo "Error: Invalid username format '$create_user' - must start with letter/underscore, contain only lowercase alphanumeric, underscore, or hyphen" >&2
@@ -846,10 +853,6 @@ __create_service_user() {
   fi
   # Check if user and group already exist
   if grep -shq "^$create_user:" "/etc/passwd" && grep -shq "^$create_group:" "/etc/group"; then
-    return 0
-  fi
-  # Root user/group - nothing to create
-  if [ "$create_user" = "root" ] && [ "$create_group" = "root" ]; then
     return 0
   fi
   # Override with RUNAS_USER if specified and not root
@@ -968,7 +971,6 @@ __create_env_file() {
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __exec_command() {
-  local exitCode=0
   if [ $# -eq 0 ]; then
     exec bash -l
   fi
@@ -1071,7 +1073,7 @@ __start_init_scripts() {
                   __service_banner "✅" "Service $service started successfully -" "PID: ${retPID} ($found_process)"
                 elif [ -f "$expected_pid_file" ]; then
                   # No running process but PID file exists - verify PID is valid
-                  file_pid=$(<"$expected_pid_file") 2>/dev/null
+                  file_pid=$(cat "$expected_pid_file" 2>/dev/null)
                   if [ -n "$file_pid" ] && kill -0 "$file_pid" 2>/dev/null; then
                     initStatus="0"
                     __service_banner "✅" "Service $service started successfully -" "PID: $file_pid (from file)"
@@ -1122,16 +1124,65 @@ __start_init_scripts() {
 __setup_mta() {
   # Check for an installed MTA binary — directories alone cannot be trusted because
   # /etc/postfix ships in some base images (casjaysdev/alpine) even without postfix.
-  command -v ssmtp &>/dev/null || command -v postfix &>/dev/null || return 0
+  command -v msmtp &>/dev/null || command -v ssmtp &>/dev/null || command -v postfix &>/dev/null || return 0
   local exitCode=0
-  local relay_port="${EMAIL_RELAY//*:/}"
-  local relay_server="${EMAIL_RELAY//:*/}"
+  # Extract server and port only when EMAIL_RELAY contains a colon
+  local relay_server="" relay_port=""
+  if [[ "$EMAIL_RELAY" == *:* ]]; then
+    relay_server="${EMAIL_RELAY%%:*}"
+    relay_port="${EMAIL_RELAY##*:}"
+  else
+    relay_server="$EMAIL_RELAY"
+  fi
   local local_hostname="${FULL_DOMAIN_NAME:-}"
   local account_user="${SERVER_ADMIN//@*/}"
   local account_domain="${EMAIL_DOMAIN//*@/}"
-  [[ $EMAIL_RELAY == *[0-9][0-9]* ]] || relay_port="465"
+  # Default to port 25 — plain SMTP, no cert validation required
+  relay_port="${relay_port:-25}"
+  # Autodetect Docker host gateway as SMTP relay when EMAIL_RELAY is unset
+  if [ -z "$EMAIL_RELAY" ] && timeout 2 bash -c 'echo >/dev/tcp/172.17.0.1/25' 2>/dev/null; then
+    relay_server="172.17.0.1"
+    relay_port="25"
+  fi
+  # Port 25 is plain SMTP — no TLS; anything else defaults to TLS on
+  local relay_use_tls="Yes"
+  local relay_smtp_tls="yes"
+  [ "$relay_port" = "25" ] && relay_use_tls="No" && relay_smtp_tls="no"
+  ################# msmtp relay setup
+  if command -v msmtp &>/dev/null; then
+    [ -d "/config/msmtp" ] || mkdir -p "/config/msmtp"
+    [ -f "/etc/msmtprc" ] && __rm "/etc/msmtprc"
+    if [ ! -f "/config/msmtp/msmtprc" ]; then
+      cat >"/config/msmtp/msmtprc" <<EOF
+# msmtp configuration.
+defaults
+auth           on
+tls            ${relay_use_tls,,}
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+logfile        /var/log/msmtp.log
+
+account        default
+host           ${relay_server:-172.17.0.1}
+port           $relay_port
+from           ${account_user:-root}@${account_domain:-$HOSTNAME}
+#user          username
+#password      password
+
+EOF
+    fi
+    if [ -f "/config/msmtp/msmtprc" ]; then
+      __symlink "/config/msmtp/msmtprc" "/etc/msmtprc"
+      __initialize_replace_variables "/etc/msmtprc"
+      chmod 600 "/etc/msmtprc" 2>/dev/null || true
+      # sendmail compat symlink
+      if [ ! -e "/usr/sbin/sendmail" ] && command -v msmtp &>/dev/null; then
+        __symlink "$(command -v msmtp)" "/usr/sbin/sendmail"
+      fi
+      [ "$DEBUGGER" = "on" ] && echo "Done setting up msmtp"
+    fi
+
   ################# sSMTP relay setup
-  if command -v ssmtp &>/dev/null; then
+  elif command -v ssmtp &>/dev/null; then
     [ -d "/config/ssmtp" ] || mkdir -p "/config/ssmtp"
     [ -f "/etc/ssmtp/ssmtp.conf" ] && __rm "/etc/ssmtp/ssmtp.conf"
     symlink_files="$(__find_file_relative "/config/ssmtp")"
@@ -1143,7 +1194,7 @@ mailhub=${relay_server:-172.17.0.1}:$relay_port
 rewriteDomain=$local_hostname
 hostname=$local_hostname
 TLS_CA_FILE=/etc/ssl/certs/ca-certificates.crt
-UseTLS=Yes
+UseTLS=${relay_use_tls}
 UseSTARTTLS=No
 AuthMethod=LOGIN
 FromLineOverride=yes
@@ -1191,7 +1242,7 @@ transport_maps = hash:/etc/postfix/transport
 virtual_alias_maps = hash:/etc/postfix/virtual
 relay_domains = hash:/etc/postfix/mydomains, regexp:/etc/postfix/mydomains.pcre
 tls_random_source = dev:/dev/urandom
-smtp_use_tls = yes
+smtp_use_tls = ${relay_smtp_tls}
 smtpd_use_tls = yes
 smtpd_tls_session_cache_database = btree:/etc/postfix/smtpd_scache
 smtpd_tls_exclude_ciphers = aNULL, eNULL, EXPORT, DES, RC4, MD5, PSK, aECDH, EDH-DSS-DES-CBC3-SHA, EDH-RSA-DES-CBC3-SHA, KRB5-DES, CBC3-SHA
@@ -1432,16 +1483,18 @@ __initialize_ssl_certs() {
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __start_php_dev_server() {
-  if [ "$2" = "yes" ]; then
-    if [ -d "/usr/local/share/httpd" ]; then
-      find "/usr/local/share/httpd" -type f -not -path '.git*' -iname '*.php' -exec sed -i 's|[<].*SERVER_ADDR.*[>]|'${CONTAINER_IP4_ADDRESS:-127.0.0.1}'|g' {} \; 2>/dev/null
-      php -S 0.0.0.0:$PHP_DEV_SERVER_PORT -t "/usr/local/share/httpd"
-    fi
-    if [[ "$1" != "/usr/local/share/httpd"* ]]; then
-      find "$1" -type f -not -path '.git*' -iname '*.php' -exec sed -i 's|[<].*SERVER_ADDR.*[>]|'${CONTAINER_IP4_ADDRESS:-127.0.0.1}'|g' {} \; 2>/dev/null
-      php -S 0.0.0.0:$PHP_DEV_SERVER_PORT -t "$1"
-    fi
+  [ "$2" = "yes" ] || return 0
+  local docroot=""
+  # Prefer a custom doc root when it differs from the default share path
+  if [ -n "$1" ] && [[ "$1" != "/usr/local/share/httpd"* ]]; then
+    docroot="$1"
+  elif [ -d "/usr/local/share/httpd" ]; then
+    docroot="/usr/local/share/httpd"
   fi
+  [ -n "$docroot" ] || return 0
+  find "$docroot" -type f -not -path '.git*' -iname '*.php' \
+    -exec sed -i 's|[<].*SERVER_ADDR.*[>]|'"${CONTAINER_IP4_ADDRESS:-127.0.0.1}"'|g' {} \; 2>/dev/null
+  php -S "0.0.0.0:${PHP_DEV_SERVER_PORT}" -t "$docroot"
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __check_service() {
@@ -1484,7 +1537,7 @@ __switch_to_user() {
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # usage backup "days" "hours"
 __backup() {
-  local dirs="" backup_dir backup_name backup_exclude runTime cronTime maxDays
+  local dirs=() backup_dir backup_name backup_exclude runTime cronTime maxDays
   if test -n "$1" && test -z "${1//[0-9]/}"; then
     maxDays="$1"
     shift 1
@@ -1506,11 +1559,11 @@ __backup() {
   backup_dir="$BACKUP_DIR/$(date +'%y/%m')"
   backup_name="$(date +'%d_%H-%M').tar.gz"
   backup_exclude="/data/logs $BACKUP_DIR $BACK_EXCLUDE_DIR"
-  [ -d "/data" ] && dirs+="/data "
-  [ -d "/config" ] && dirs+="/config "
+  [ -d "/data" ] && dirs+=("/data")
+  [ -d "/config" ] && dirs+=("/config")
   [ -d "$logDir" ] || mkdir -p "$logDir"
   [ -d "$backup_dir" ] || mkdir -p "$backup_dir"
-  [ -z "$dirs" ] && echo "BACKUP_DIR is unset" >&2 && return 1
+  [ "${#dirs[@]}" -eq 0 ] && echo "BACKUP_DIR is unset" >&2 && return 1
   [ -f "$pidFile" ] && echo "A backup job is already running" >&2 && return 1
   echo "$$" >"$pidFile"
   trap "rm -f '$pidFile'" EXIT INT TERM
@@ -1519,7 +1572,7 @@ __backup() {
   for excl in $backup_exclude; do
     tar_excludes+=("--exclude=$excl")
   done
-  tar "${tar_excludes[@]}" -cfvz "$backup_dir/$backup_name" $dirs 2>/dev/stderr >>"$logDir/$CONTAINER_NAME" || exitCodeP=1
+  tar "${tar_excludes[@]}" -cfvz "$backup_dir/$backup_name" "${dirs[@]}" 2>/dev/stderr >>"$logDir/$CONTAINER_NAME" || exitCodeP=1
   if [ $exitCodeP -eq 0 ]; then
     echo "Backup has completed and saved to: $backup_dir/$backup_name"
     printf '%s\n\n' "Backup has completed on $(date)" >>"$logDir/$CONTAINER_NAME"
@@ -1536,7 +1589,11 @@ __backup() {
   else
     return $exitStatus
   fi
-  sleep $runTime && __backup "$maxDays" "$cronTime"
+  # Loop instead of recurse — recursion adds a stack frame every interval
+  while true; do
+    sleep "$runTime"
+    __backup "$maxDays"
+  done
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # set variables from function calls

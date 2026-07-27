@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202605311104-git
+##@Version           :  202607271318-git
 # @@Author           :  CasjaysDev
 # @@Contact          :  CasjaysDev <docker-admin@casjaysdev.pro>
-# @@License          :  MIT
+# @@License          :  WTFPL
 # @@Copyright        :  Copyright 2026 CasjaysDev
-# @@Created          :  Sun May 31 11:04:49 AM EDT 2026
+# @@Created          :  Mon Jul 27 01:18:35 PM EDT 2026
 # @@File             :  03-files.sh
 # @@Description      :  script to run files
 # @@Changelog        :  newScript
@@ -20,7 +20,7 @@
 # shellcheck disable=SC1001,SC1003,SC2001,SC2003,SC2016,SC2031,SC2090,SC2115,SC2120,SC2155,SC2199,SC2229,SC2317,SC2329
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Set bash options
-set -o pipefail
+set -eo pipefail
 [ "$DEBUGGER" = "on" ] && echo "Enabling debugging" && set -x$DEBUGGER_OPTIONS
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Set env variables
@@ -61,29 +61,23 @@ if [ -d "/tmp/etc" ]; then
     if [ -d "$config" ]; then
       mkdir -p "/etc/$name"
       cp -Rf "$config/." "/etc/$name/"
-      mkdir -p "/usr/local/share/template-files/config/$name"
-      cp -Rf "$config/." "/usr/local/share/template-files/config/$name/"
     else
       cp -Rf "$config" "/etc/$name"
-      cp -Rf "$config" "/usr/local/share/template-files/config/$name"
     fi
   done
 fi
 unset config
-if [ -d "/tmp/data" ]; then
-  for data in "/tmp/data"/*; do
-    [ -e "$data" ] || continue
-    name="${data##*/}"
-    echo "Installing $data to /usr/local/share/template-files/data"
-    if [ -d "$data" ]; then
-      mkdir -p "/usr/local/share/template-files/data/$name"
-      cp -Rf "$data/." "/usr/local/share/template-files/data/$name/"
-    else
-      cp -Rf "$data" "/usr/local/share/template-files/data/$name"
-    fi
+if [ -d "/tmp/usr" ]; then
+  for share in "/tmp/usr"/*; do
+    [ -e "$share" ] || continue
+    name="${share##*/}"
+    dest="/usr/$name"
+    echo "Installing $share to $dest"
+    mkdir -p "$dest"
+    cp -Rf "$share/." "$dest/"
   done
 fi
-unset data
+unset share
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Main script
 
