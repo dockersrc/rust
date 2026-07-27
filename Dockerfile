@@ -31,12 +31,13 @@ ARG BUILD_VERSION="${BUILD_DATE}"
 
 FROM tianon/gosu:latest AS gosu
 
-# ─── native cross-compile stage ───────────────────────────────────────────────
+# ─── native prebuilt-fetch stage ──────────────────────────────────────────────
 # Mirrors the go-tools pattern: runs on the build platform (always native amd64
-# in CI). For arm64 targets the musl cross-toolchain compiles natively instead
-# of under QEMU — turning a 15-hour emulated build into a 30-60 minute one.
-# cargo binstall --target fetches prebuilt binaries from GitHub releases;
-# for tools without prebuilts it falls back to native cross-compilation.
+# in CI). Tool binaries are fetched as prebuilts for the target arch — no
+# compilation, no QEMU — turning a 15-hour emulated build into minutes.
+# cargo binstall --disable-strategies compile fetches prebuilt binaries from
+# GitHub releases only; tools without a prebuilt for the target arch are
+# skipped rather than compiled from source.
 FROM --platform=$BUILDPLATFORM rust:alpine AS rust-tools
 ARG TARGETARCH
 
@@ -283,7 +284,7 @@ RUN echo "Custom Applications"; \
   $SHELL_OPTS; \
 echo ""
 
-# Target-arch tool binaries compiled natively in the rust-tools stage;
+# Target-arch tool binaries fetched as prebuilts in the rust-tools stage;
 # copied here before 05-custom.sh runs so the symlink loop picks them up
 COPY --from=rust-tools /rust-tools/bin/ /usr/local/share/cargo/bin/
 
