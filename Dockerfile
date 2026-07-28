@@ -82,15 +82,19 @@ ENV CARGO_INSTALL_ROOT=/rust-tools
 # Install all Rust tools for the target arch — prebuilt binaries ONLY, no source fallback.
 # Tools without prebuilts for the target arch are silently skipped (exit 0).
 # This cuts arm64 build time from hours to minutes.
+# One `cargo binstall` invocation PER tool — cargo-binstall resolves its whole
+# argument list before installing anything, so batching tools in one invocation
+# means a single tool with no prebuilt (--disable-strategies compile forbids the
+# cargo-install fallback) aborts the entire batch and silently installs nothing,
+# even for tools that resolved fine. Isolating each tool's `|| true` is required
+# for "skip what's missing, keep what's available" to actually work.
 RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git-native,sharing=locked,target=/usr/local/cargo/git \
     set -o pipefail; \
     RUST_TARGET="$(cat /tmp/rust-target)"; \
     # Disable telemetry prompt — required for non-interactive builds
     mkdir -p /usr/local/cargo && echo 'disable-telemetry = true' > /usr/local/cargo/binstall.toml; \
-    BINSTALL="cargo binstall -y --disable-strategies compile --target ${RUST_TARGET}"; \
-    # Core tools — most have prebuilts for both amd64 and arm64
-    $BINSTALL \
+    for tool in \
       cargo-binstall \
       cargo-edit \
       cargo-watch \
@@ -120,9 +124,7 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       cargo-sort \
       cargo-hack \
       dprint \
-      grcov || true; \
-    # Secondary tools — may or may not have prebuilts
-    $BINSTALL \
+      grcov \
       cargo-llvm-cov \
       cargo-tarpaulin \
       wasm-pack \
@@ -151,7 +153,10 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       flamegraph \
       probe-rs \
       sqlx-cli \
-      sea-orm-cli || true
+      sea-orm-cli; \
+    do \
+      cargo binstall -y --disable-strategies compile --target "${RUST_TARGET}" "${tool}" || true; \
+    done
 
 FROM ${PULL_URL}:${DISTRO_VERSION} AS build
 ARG TZ
