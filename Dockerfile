@@ -104,6 +104,7 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       bacon \
       cargo-audit \
       cargo-deny \
+      cargo-cyclonedx \
       cargo-machete \
       cargo-semver-checks \
       cargo-make \
@@ -350,10 +351,10 @@ LABEL org.opencontainers.image.authors="${LICENSE}"
 LABEL org.opencontainers.image.created="${BUILD_DATE}"
 LABEL org.opencontainers.image.version="${BUILD_VERSION}"
 LABEL org.opencontainers.image.schema-version="${BUILD_VERSION}"
-LABEL org.opencontainers.image.url="https://docker.io/casjaysdev/rust"
+LABEL org.opencontainers.image.url="https://hub.docker.com/r/casjaysdev/rust"
 LABEL org.opencontainers.image.vcs-type="Git"
 LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
-LABEL org.opencontainers.image.source="https://docker.io/casjaysdev/rust"
+LABEL org.opencontainers.image.source="https://github.com/dockersrc/rust"
 LABEL org.opencontainers.image.documentation="https://github.com/dockersrc/rust"
 LABEL com.github.containers.toolbox="false"
 
