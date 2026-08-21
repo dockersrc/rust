@@ -1,5 +1,17 @@
 # TODO.AI.md
 
+## script-lint violations in entrypoint.sh / functions/entrypoint.sh
+
+Flagged by `script-lint` 2026-08-21 (not part of this session's changes — no scripts were
+edited this session, only `Dockerfile`/`TODO.AI.md`). 19 pre-existing violations:
+
+- `entrypoint.sh` lines 552, 665: bare `exit` — use `exit 0`, `exit 1`, or `exit "$?"`.
+- `functions/entrypoint.sh` lines 80, 92, 111, 141, 169 (x2), 685 (x2), 741, 751, 812,
+  855 (x2), 901, 912, 936: missing `--` separator before a grep query pattern.
+
+Needs a dedicated pass to fix all 19 and re-run `script-lint` before the next commit that
+touches either file.
+
 ## GitHub API rate-limiting drops most cross tools on arm64 — CLOSED
 
 Verified 2026-08-21, re-verified after fix: a pushed multi-platform build
