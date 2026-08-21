@@ -1,40 +1,67 @@
 # TODO.AI.md
 
-## GitHub API rate-limiting drops most cross tools on arm64
+## GitHub API rate-limiting drops most cross tools on arm64 — CLOSED
 
-Verified 2026-08-21: a pushed multi-platform build (`docker.io/casjaysdev/rust:latest`,
-`linux/amd64,linux/arm64`) hit unauthenticated GitHub API rate-limiting (60 req/hr) during
-the `rust-tools` stage's `cargo binstall` tool loop, because both platforms build
-concurrently against the same shared, unauthenticated budget.
+Verified 2026-08-21, re-verified after fix: a pushed multi-platform build
+(`docker.io/casjaysdev/rust:latest`, `linux/amd64,linux/arm64`) originally hit
+unauthenticated GitHub API rate-limiting (60 req/hr) during the `rust-tools` stage's
+`cargo binstall` tool loop, because both platforms build concurrently against the same
+shared, unauthenticated budget.
 
-Verified tool inventory in the pushed image:
+Fix applied: `Dockerfile`'s `rust-tools` stage `cargo binstall` `RUN` now accepts an
+optional BuildKit secret (`--mount=type=secret,id=github_token,env=GITHUB_TOKEN,
+required=false`), matching the existing pattern in the sibling `go` image's Dockerfile.
+The local build wrapper now supplies `--secret id=github_token,env=GITHUB_ACCESS_TOKEN`
+on the real `docker buildx build` invocation (confirmed via `pgrep -af`).
 
-- `linux/amd64`: 14 of 60 tools missing (`cargo-edit`, `cargo-update`, `typos-cli`,
-  `taplo-cli`, `wasm-bindgen-cli`, `cargo-binutils`, `cargo-public-api`,
-  `cargo-spellcheck`, `cargo-dist`, `cargo-fuzz`, `flamegraph`, `probe-rs`, `sqlx-cli`,
-  `sea-orm-cli`)
-- `linux/arm64`: 40 of 60 tools missing (nearly the whole list, cascading from
-  `cargo-binstall` itself onward once the rate limit was exhausted)
+**Confirmed resolved:** a fresh, wrapper-invoked, `--no-cache` multi-platform build
+(runtime 1h37m) produced **0** `403 Forbidden` errors across the full build log
+(`grep -c '403 Forbidden' /root/.local/log/buildx/docker.io/casjaysdev/rust/all.log` → 0).
 
-Fix applied in this session: `Dockerfile`'s `rust-tools` stage `cargo binstall` `RUN` now
-accepts an optional BuildKit secret (`--mount=type=secret,id=github_token,env=GITHUB_TOKEN,
-required=false`), matching the existing pattern already present in the sibling `go` image's
-Dockerfile. This raises the GitHub API rate limit from 60 to 5000 req/hr when a token is
-supplied.
+## Tool-inventory gap — final status
 
-**Still open — outside this repo's scope:** the local build wrapper
-(`/usr/local/bin/buildx` → `/usr/local/share/CasjaysDev/scripts/bin/buildx`, a shared
-CasjaysDev script, not owned by this repo) does not pass `--secret id=github_token,
-env=GITHUB_TOKEN` on any `docker buildx build` invocation it generates — confirmed by
-grepping the saved build command in `/root/.config/myscripts/buildx/scripts/casjaysdev/
-rust-latest.sh`. Until that wrapper is updated (or the build is invoked manually with the
-secret flag), this Dockerfile fix has no effect and future pushed builds will keep hitting
-the same rate limit. This also affects the `go` image, which has carried the same
-secret-mount plumbing without the wrapper ever supplying it.
+Raw `command -v` check against the fixed, pushed image originally reported 12 tools
+"MISSING" on amd64. Manual verification found 6 were false positives (crate name ≠
+binary name) and 6 were genuine gaps. All genuine gaps have now been investigated and
+either fixed or root-caused:
 
-Needs a decision from the user: fix the shared wrapper script (affects all dockersrc/
-casjaysdevdocker image builds, not just this repo), or accept manual
-`--secret id=github_token,env=GITHUB_TOKEN` invocation for now.
+**False positives (no fix needed, binary confirmed working under its real name):**
+`cargo-edit`→`cargo-add`/`cargo-rm`/`cargo-upgrade`/`cargo-set-version`,
+`cargo-update`→`cargo-install-update`, `typos-cli`→`typos`, `taplo-cli`→`taplo`,
+`wasm-bindgen-cli`→`wasm-bindgen`, `cargo-binutils`→`cargo-nm`/`cargo-objdump`/
+`cargo-size`/`cargo-strip`.
+
+**Fixed this session:**
+- `cargo-public-api`, `cargo-dist`, `sea-orm-cli` — root cause: these 3 crates have no
+  musl prebuilt (any platform) and fall through to the compile-fallback loop, where
+  linking failed with `cannot find -lssl` / `cannot find -lcrypto`. Alpine's
+  `openssl-dev` package ships only the shared libs; static linking against musl needs
+  `openssl-libs-static` for `libssl.a`/`libcrypto.a`. Reproduced and fixed in a
+  standalone debug container (`rust:alpine`, manual `apk add openssl-libs-static`), then
+  confirmed all 3 now `cargo binstall -y` successfully (exit 0). Fix applied: added
+  `RUN apk add --no-cache openssl-dev openssl-libs-static pkgconfig` immediately before
+  the compile-fallback loop in `Dockerfile`.
+- `probe-rs` — root cause: wrong crate name in the tool list. The `probe-rs` crate is a
+  library with no installable binary (`cargo binstall` error: "no binaries specified nor
+  inferred"); the CLI binaries (`probe-rs`, `cargo-flash`, `cargo-embed`) are published
+  under the `probe-rs-tools` crate, which **does** have a musl prebuilt via QuickInstall
+  (installs in ~2s, no compile needed). Fix applied: changed `probe-rs` → `probe-rs-tools`
+  in the main prebuilt-fetch loop and removed it from the compile-fallback loop (no
+  longer needed there).
+
+**Genuine remaining limitation — documented, not fixed:**
+- `cargo-spellcheck` — no musl prebuilt; compile-fallback fails. Root cause is deeper
+  than a missing package: after installing `openssl-libs-static`, `g++`, and
+  `clang22-libclang` (to satisfy successive `cc`/`c++`/`libclang.so` errors), the build
+  still fails — the `hunspell-sys` dependency's build script
+  (`hunspell-sys-*/build-script-build`) crashes with `SIGSEGV` (signal 11) while
+  compiling the vendored C++ `hunspell` library, not a missing-dependency error. This is
+  a crash inside a third-party build script under this musl cross-compile environment,
+  not something fixable with an `apk add` line; not pursued further given the size of
+  the additional dependencies required (`llvm`/`clang` ~480MiB in the intermediate stage
+  alone) for a tool that still doesn't build. Left in the compile-fallback loop with
+  `|| true` — will keep silently skipping on every build until upstream `hunspell-sys`
+  or `cargo-spellcheck` fixes the underlying crash.
 
 ## mingw-w64-gcc has no arm64 Alpine package
 
@@ -49,3 +76,11 @@ This is an Alpine package-availability limitation (mingw-w64-gcc is not publishe
 aarch64 in the Alpine repos as of this check), not a bug in this repo's scripts. No
 in-repo fix available; document as a known limitation if not already covered by README's
 existing Windows-MSVC/macOS-SDK caveats section.
+
+**Workaround tested and failed:** `cargo zigbuild --target x86_64-pc-windows-gnu` was
+tried on the arm64 image as a substitute cross-linker (zig is already used elsewhere in
+this Dockerfile for musl cross-linking). It compiled the test crate but failed at link
+time: `error: linking with .../zigcc-x86_64-pc-windows-gnu-*.sh failed: exit status: 1`,
+no `.exe` produced (full log: `/tmp/zigbuild_test.log`, not preserved in-repo). Not a
+working substitute — the arm64 `mingw-w64-gcc` limitation remains open with no known
+workaround.

@@ -159,11 +159,37 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       cross \
       samply \
       flamegraph \
-      probe-rs \
+      probe-rs-tools \
       sqlx-cli \
       sea-orm-cli; \
     do \
       cargo binstall -y --disable-strategies compile --target "${RUST_TARGET}" "${tool}" || true; \
+    done
+
+# A handful of tools ship no prebuilt for musl targets at all (verified via
+# `cargo binstall` "Fallback to cargo-install is disabled" on both amd64 and
+# arm64 — a 404 from every prebuilt source, not a rate-limit issue). For just
+# these, allow the compile fallback: this stage already cross-links via the
+# zig wrapper scripts above, so compiling here is a native cross-build, not
+# QEMU emulation, and stays fast for this small a tool set.
+# openssl-libs-static is required alongside openssl-dev: Alpine's openssl-dev
+# only ships the shared libs, and these tools link OpenSSL statically for the
+# musl target — without it, linking fails with "cannot find -lssl"/"-lcrypto"
+# (reproduced and confirmed in a standalone debug container this session).
+RUN apk add --no-cache openssl-dev openssl-libs-static pkgconfig
+RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-git-native,sharing=locked,target=/usr/local/cargo/git \
+    --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=false \
+    set -o pipefail; \
+    RUST_TARGET="$(cat /tmp/rust-target)"; \
+    for tool in \
+      taplo-cli \
+      cargo-public-api \
+      cargo-spellcheck \
+      cargo-dist \
+      sea-orm-cli; \
+    do \
+      cargo binstall -y --target "${RUST_TARGET}" "${tool}" || true; \
     done
 
 FROM ${PULL_URL}:${DISTRO_VERSION} AS build
