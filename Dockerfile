@@ -88,8 +88,15 @@ ENV CARGO_INSTALL_ROOT=/rust-tools
 # cargo-install fallback) aborts the entire batch and silently installs nothing,
 # even for tools that resolved fine. Isolating each tool's `|| true` is required
 # for "skip what's missing, keep what's available" to actually work.
+# GITHUB_TOKEN is passed as a BuildKit secret, not ARG/ENV, so its value never
+# persists in image layers or is visible via `docker history` — pass with
+# `docker buildx build --secret id=github_token,env=GITHUB_TOKEN` (optional,
+# only raises the GitHub API rate limit from 60 to 5000 req/hr). Without it,
+# `cargo binstall` resolving 50+ tools across two concurrent platform builds
+# exhausts the unauthenticated limit and silently skips most remaining tools.
 RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git-native,sharing=locked,target=/usr/local/cargo/git \
+    --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=false \
     set -o pipefail; \
     RUST_TARGET="$(cat /tmp/rust-target)"; \
     # Disable telemetry prompt — required for non-interactive builds
