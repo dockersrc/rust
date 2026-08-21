@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202607082023-git
+##@Version           :  202608211702-git
 # @@Author           :  Jason Hempstead
 # @@Contact          :  jason@casjaysdev.pro
 # @@License          :  WTFPL
 # @@ReadME           :  entrypoint.sh --help
 # @@Copyright        :  Copyright: (c) 2026 Jason Hempstead, Casjays Developments
-# @@Created          :  Monday, Jul 27, 2026 13:18 EDT
+# @@Created          :  Friday, Aug 21, 2026 17:02 EDT
 # @@File             :  entrypoint.sh
 # @@Description      :  Entrypoint file for rust
 # @@Changelog        :  New script
@@ -21,11 +21,15 @@
 # shellcheck disable=SC1001,SC1003,SC2001,SC2003,SC2016,SC2031,SC2090,SC2115,SC2120,SC2155,SC2199,SC2229,SC2317,SC2329
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # run trap command on exit
-trap 'retVal=$?;[ "$SERVICE_IS_RUNNING" != "yes" ] && [ -f "$SERVICE_PID_FILE" ] && rm -Rf "$SERVICE_PID_FILE";exit $retVal' INT TERM
-trap 'retVal=$?;[ "$SERVICE_IS_RUNNING" != "yes" ] && [ -f "$SERVICE_PID_FILE" ] && rm -Rf "$SERVICE_PID_FILE";exit $retVal' SIGPWR 2>/dev/null || true
+trap 'retVal=$?; if [ "$SERVICE_IS_RUNNING" != "yes" ] && [ -f "$SERVICE_PID_FILE" ]; then rm -Rf "$SERVICE_PID_FILE"; fi; exit $retVal' INT TERM
+trap 'retVal=$?; if [ "$SERVICE_IS_RUNNING" != "yes" ] && [ -f "$SERVICE_PID_FILE" ]; then rm -Rf "$SERVICE_PID_FILE"; fi; exit $retVal' SIGPWR 2>/dev/null || true
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # setup debugging - https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
-[ -f "/config/.debug" ] && [ -z "$DEBUGGER_OPTIONS" ] && export DEBUGGER_OPTIONS="$(<"/config/.debug")" || DEBUGGER_OPTIONS="${DEBUGGER_OPTIONS:-}"
+if [ -f "/config/.debug" ] && [ -z "$DEBUGGER_OPTIONS" ]; then
+  export DEBUGGER_OPTIONS="$(<"/config/.debug")"
+else
+  DEBUGGER_OPTIONS="${DEBUGGER_OPTIONS:-}"
+fi
 if [ "$DEBUGGER" = "on" ] || [ -f "/config/.debug" ]; then
   echo "Enabling debugging"
   set -eo pipefail
@@ -39,12 +43,19 @@ PATH="/usr/local/etc/docker/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin"
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Set bash options
 SCRIPT_FILE="$0"
+VERSION="202608211702-git"
 CONTAINER_NAME="rust"
 SCRIPT_NAME="${SCRIPT_FILE##*/}"
 CONTAINER_NAME="${ENV_CONTAINER_NAME:-$CONTAINER_NAME}"
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # remove whitespaces from beginning argument
-while :; do [ "$1" = " " ] && shift 1 || break; done
+while :; do
+  if [ "$1" = " " ]; then
+    shift 1
+  else
+    break
+  fi
+done
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 [ "$1" = "$SCRIPT_FILE" ] && shift 1
 [ "$1" = "$SCRIPT_NAME" ] && shift 1
@@ -476,8 +487,14 @@ START_SERVICES="${START_SERVICES:-yes}"
 # Determine if we should start services based on command
 # Only skip service start for the 'init' command
 SKIP_SERVICE_START="no"
-[ "$1" = "init" ] && SKIP_SERVICE_START="yes" && CONTAINER_INIT="yes"
-[ "$2" = "init" ] && SKIP_SERVICE_START="yes" && CONTAINER_INIT="yes"
+if [ "$1" = "init" ]; then
+  SKIP_SERVICE_START="yes"
+  CONTAINER_INIT="yes"
+fi
+if [ "$2" = "init" ]; then
+  SKIP_SERVICE_START="yes"
+  CONTAINER_INIT="yes"
+fi
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # Start all services if no pidfile and not skipping
 # Start all services only when no command was given at all — an explicit
@@ -549,7 +566,7 @@ cron)
   shift 1
   __cron "$@" &
   __log_info "Cron script is running with PID: $!"
-  exit
+  exit 0
   ;;
 # backup data and config dirs
 backup)
@@ -661,8 +678,12 @@ start)
   export PATH="/usr/local/etc/docker/init.d:$PATH"
   if [ $# -eq 0 ]; then
     scripts="$(ls -A "/usr/local/etc/docker/init.d")"
-    [ -n "$scripts" ] && echo "$scripts" || echo "No scripts found in: /usr/local/etc/docker/init.d"
-    exit
+    if [ -n "$scripts" ]; then
+      echo "$scripts"
+    else
+      echo "No scripts found in: /usr/local/etc/docker/init.d"
+    fi
+    exit 0
   elif [ "$1" = "all" ]; then
     shift $#
     if [ "$START_SERVICES" = "yes" ]; then
@@ -680,7 +701,9 @@ start)
   if [ $# -eq 0 ]; then
     if [ ! -f "$ENTRYPOINT_PID_FILE" ]; then
       echo "$$" >"$ENTRYPOINT_PID_FILE"
-      [ "$START_SERVICES" = "no" ] && [ "$CONTAINER_INIT" = "yes" ] || __start_init_scripts "/usr/local/etc/docker/init.d"
+      if ! { [ "$START_SERVICES" = "no" ] && [ "$CONTAINER_INIT" = "yes" ]; }; then
+        __start_init_scripts "/usr/local/etc/docker/init.d"
+      fi
     fi
     __no_exit
   else

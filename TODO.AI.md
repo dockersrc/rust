@@ -1,16 +1,39 @@
 # TODO.AI.md
 
-## script-lint violations in entrypoint.sh / functions/entrypoint.sh
+## script-lint violations in entrypoint.sh / functions/entrypoint.sh — FIXED
 
-Flagged by `script-lint` 2026-08-21 (not part of this session's changes — no scripts were
-edited this session, only `Dockerfile`/`TODO.AI.md`). 19 pre-existing violations:
+Flagged by `script-lint` 2026-08-21. Fixed at the upstream template source (per AI.md
+non-negotiable rule #2 — generated files are never hand-tuned), then regenerated:
+`/usr/local/share/CasjaysDev/scripts/templates/scripts/other/docker-entrypoint` (bare
+`exit` → `exit 0` at 2 sites) and
+`/usr/local/share/CasjaysDev/scripts/templates/scripts/functions/docker-entrypoint`
+(missing `grep --` separator, 13 sites). `entrypoint.sh` and
+`functions/entrypoint.sh` regenerated from the fixed templates via `gen-dockerfile
+--dir <tmp> --nogit --template alpine --repo rust --org dockersrc` and copied forward.
+`script-lint` re-run confirms all 19 original violations resolved.
 
-- `entrypoint.sh` lines 552, 665: bare `exit` — use `exit 0`, `exit 1`, or `exit "$?"`.
-- `functions/entrypoint.sh` lines 80, 92, 111, 141, 169 (x2), 685 (x2), 741, 751, 812,
-  855 (x2), 901, 912, 936: missing `--` separator before a grep query pattern.
+A follow-up `script-lint` re-run surfaced 5 residuals in the same two upstream templates,
+also now fixed:
 
-Needs a dedicated pass to fix all 19 and re-run `script-lint` before the next commit that
-touches either file.
+- `other/docker-entrypoint`: `##@Version` header had no matching `VERSION=` assignment.
+  Added `VERSION="GEN_SCRIPT_REPLACE_VERSION"` in the "Set bash options" block, and
+  switched the header itself from a hardcoded date to the `GEN_SCRIPT_REPLACE_VERSION`
+  placeholder (this template is `gen-script`-processed at generation time, so both now
+  get stamped with the same timestamp — confirmed in the regenerated `entrypoint.sh`:
+  header and `VERSION=` both read `202608211702-git`).
+- `functions/docker-entrypoint`: `##@Version` header (202608030955-git) had no matching
+  `VERSION=` assignment. Added `VERSION="202608030955-git"` (literal, matching the
+  header) in a new "script variables" block after the shellcheck-disable header —
+  this template is plain `cp`'d by `gen-dockerfile`, not `gen-script`-processed, so a
+  `GEN_SCRIPT_REPLACE_VERSION` placeholder here would never get substituted and would
+  ship broken in every generated repo.
+- `functions/docker-entrypoint` line ~874 (x2): `$(dirname "$log_file")` → `${log_file%/*}`.
+- `functions/docker-entrypoint` line ~992: `$(dirname "$create_env")` → `${create_env%/*}`.
+- `functions/docker-entrypoint` line ~1106: `$(cat "$expected_pid_file" 2>/dev/null)` →
+  `$(<"$expected_pid_file" 2>/dev/null)`.
+
+`entrypoint.sh` and `functions/entrypoint.sh` regenerated again from the fixed templates
+and copied forward. `script-lint` re-run confirms both files clean — 0 violations.
 
 ## GitHub API rate-limiting drops most cross tools on arm64 — CLOSED
 

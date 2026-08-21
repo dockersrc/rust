@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # - - - - - - - - - - - - - - - - - - - - - - - - -
-##@Version           :  202607271325-git
+##@Version           :  202608030955-git
 # @@Author           :  Jason Hempstead
 # @@Contact          :  git-admin@casjaysdev.pro
 # @@License          :  LICENSE.md
@@ -10,7 +10,7 @@
 # @@Created          :  Sunday, Sep 03, 2023 01:40 EDT
 # @@File             :  docker-entrypoint
 # @@Description      :  functions for my docker containers
-# @@Changelog        :  fix __setup_mta calling __symlink with from/to swapped, which no-op'd the symlink and broke msmtp/ssmtp/postfix config on container start
+# @@Changelog        :  fix __symlink/__initialize_ssl_certs returning nonzero on success under set -e, aborting the entrypoint on symlink success
 # @@TODO             :  Refactor code
 # @@Other            :
 # @@Resource         :
@@ -19,6 +19,9 @@
 # @@Template         :  functions/docker-entrypoint
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # shellcheck disable=SC1001,SC1003,SC2001,SC2003,SC2016,SC2031,SC2090,SC2115,SC2120,SC2155,SC2199,SC2229,SC2317,SC2329
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# script variables
+VERSION="202608030955-git"
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 # setup debugging - https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
 if [ -f "/config/.debug" ] && [ -z "$DEBUGGER_OPTIONS" ]; then
@@ -77,7 +80,7 @@ __rm() {
   fi
   return 0
 }
-__grep_test() { grep -sh "$1" "$2" 2>/dev/null | grep -qwF "${3:-$1}"; }
+__grep_test() { grep -sh -- "$1" "$2" 2>/dev/null | grep -qwF -- "${3:-$1}"; }
 __netstat() {
   command -v netstat &>/dev/null || {
     [ "$DEBUGGER" = "on" ] && echo "Warning: netstat command not found" >&2
@@ -89,7 +92,7 @@ __cd() {
   [ -d "$1" ] || mkdir -p "$1" 2>/dev/null || return 1
   builtin cd "$1" || return 1
 }
-__is_in_file() { [ -e "$2" ] && grep -Rsq "$1" "$2" 2>/dev/null; }
+__is_in_file() { [ -e "$2" ] && grep -Rsq -- "$1" "$2" 2>/dev/null; }
 __curl() { curl -q -sfI --max-time 3 -k -o /dev/null "$@" 2>/dev/null || return 10; }
 __find() {
   local result
@@ -102,16 +105,26 @@ __find() {
   printf '%s\n' "$result"
 }
 __pcheck() {
-  command -v pgrep &>/dev/null && pgrep -x "$1" &>/dev/null || return 10
+  if command -v pgrep &>/dev/null && pgrep -x "$1" &>/dev/null; then
+    return 0
+  fi
+  return 10
 }
-__file_exists_with_content() { [ -n "$1" ] && [ -f "$1" ] && [ -s "$1" ] || return 2; }
+__file_exists_with_content() {
+  if [ -n "$1" ] && [ -f "$1" ] && [ -s "$1" ]; then
+    return 0
+  fi
+  return 2
+}
 __sed() { sed -i "s|$1|$2|g" "$3" 2>/dev/null || return 1; }
 __ps() {
   command -v ps &>/dev/null || return 10
-  ps "$@" 2>/dev/null | sed 's|:||g' | grep -Fw " ${1:-$SERVICE_NAME}$" || return 10
+  ps "$@" 2>/dev/null | sed 's|:||g' | grep -Fw -- " ${1:-$SERVICE_NAME}$" || return 10
 }
 __is_dir_empty() {
-  [ -n "$1" ] && [ -d "$1" ] || return 1
+  if [ -z "$1" ] || [ ! -d "$1" ]; then
+    return 1
+  fi
   [ -z "$(ls -A "$1" 2>/dev/null)" ]
 }
 __get_ip6() {
@@ -138,7 +151,7 @@ __pgrep() {
   while [ $count -ge 0 ]; do
     pgrep -x "$srvc" &>/dev/null && return 0
     pgrep -f "$srvc" &>/dev/null && return 0
-    ps -eo comm 2>/dev/null | grep -qxF "$srvc" && return 0
+    ps -eo comm 2>/dev/null | grep -qxF -- "$srvc" && return 0
     [ $count -gt 0 ] && sleep 1
     count=$((count - 1))
   done
@@ -166,7 +179,7 @@ __is_running() {
   if command -v pgrep &>/dev/null; then
     pgrep -f "$pat" &>/dev/null
   else
-    ps -eo args 2>/dev/null | grep -v grep | grep -Eq "$pat"
+    ps -eo args 2>/dev/null | grep -v -- grep | grep -Eq -- "$pat"
   fi
 }
 __get_pid() {
@@ -344,9 +357,15 @@ __init_working_dir() {
   [ "$home" = "/root" ] && home="/tmp/$service_name"
   [ -z "$home" ] && home="${workdir:-/tmp/$service_name}"
   # Change to working directory
-  [ -n "$WORK_DIR" ] && [ -n "$EXEC_CMD_BIN" ] && workdir="$WORK_DIR"
-  [ -z "$WORK_DIR" ] && [ "$HOME" = "/root" ] && [ "$RUNAS_USER" != "root" ] && [ "$PWD" != "/tmp" ] && home="${workdir:-$home}"
-  [ -z "$WORK_DIR" ] && [ "$HOME" = "/root" ] && [ "$SERVICE_USER" != "root" ] && [ "$PWD" != "/tmp" ] && home="${workdir:-$home}"
+  if [ -n "$WORK_DIR" ] && [ -n "$EXEC_CMD_BIN" ]; then
+    workdir="$WORK_DIR"
+  fi
+  if [ -z "$WORK_DIR" ] && [ "$HOME" = "/root" ] && [ "$RUNAS_USER" != "root" ] && [ "$PWD" != "/tmp" ]; then
+    home="${workdir:-$home}"
+  fi
+  if [ -z "$WORK_DIR" ] && [ "$HOME" = "/root" ] && [ "$SERVICE_USER" != "root" ] && [ "$PWD" != "/tmp" ]; then
+    home="${workdir:-$home}"
+  fi
   # create needed directories
   if [ -n "$home" ]; then
     if [ ! -d "$home" ]; then
@@ -600,7 +619,10 @@ __cron() {
   else
     interval="300"
   fi
-  [ $# -eq 0 ] && echo "Usage: cron [interval] [command]" && exit 1
+  if [ $# -eq 0 ]; then
+    echo "Usage: cron [interval] [command]"
+    exit 1
+  fi
   local command="$*"
   bin="${CRON_NAME:-$1}"; bin="${bin##*/}"
   trap 'retVal=$?;[ -f "/run/cron/$bin.run" ] && rm -Rf "/run/cron/$bin.run";[ -f "/run/cron/$bin.pid" ] && rm -Rf "/run/cron/$bin.pid";exit ${retVal:-0}' SIGINT ERR EXIT
@@ -645,7 +667,15 @@ __symlink() {
   [ "$from" = "$to" ] && return 0
   __rm "$from"
   [ -d "${from%/*}" ] || mkdir -p "${from%/*}" 2>/dev/null
-  ln -sf "$to" "$from" && [ "$DEBUGGER" = "on" ] && echo "Created symlink: $from -> $to"
+  # Debug echo is decoupled from the return value on purpose — under
+  # set -eo pipefail, a bare "[ "$DEBUGGER" = on ] && echo" tail made this
+  # function return 1 (aborting the whole entrypoint) whenever the symlink
+  # succeeded but DEBUGGER was unset, since that's the normal/default case
+  if ln -sf "$to" "$from"; then
+    [ "$DEBUGGER" = "on" ] && echo "Created symlink: $from -> $to"
+    return 0
+  fi
+  return 1
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __file_copy() {
@@ -682,7 +712,7 @@ __file_copy() {
 __generate_random_uids() {
   local set_random_uid=$((100 + RANDOM % 900))
   while :; do
-    if grep -shq "x:.*:$set_random_uid:" "/etc/group" && ! grep -shq "x:$set_random_uid:.*:" "/etc/passwd"; then
+    if grep -shq -- "x:.*:$set_random_uid:" "/etc/group" && ! grep -shq -- "x:$set_random_uid:.*:" "/etc/passwd"; then
       set_random_uid=$((set_random_uid + 1))
     else
       echo "$set_random_uid"
@@ -736,9 +766,12 @@ __setup_directories() {
 __fix_permissions() {
   change_user="${1:-${SERVICE_USER:-root}}"
   change_group="${2:-${SERVICE_GROUP:-$change_user}}"
-  [ -n "$RUNAS_USER" ] && [ "$RUNAS_USER" != "root" ] && change_user="$RUNAS_USER" && change_group="$change_user"
+  if [ -n "$RUNAS_USER" ] && [ "$RUNAS_USER" != "root" ]; then
+    change_user="$RUNAS_USER"
+    change_group="$change_user"
+  fi
   if [ -n "$change_user" ]; then
-    if grep -shq "^$change_user:" "/etc/passwd"; then
+    if grep -shq -- "^$change_user:" "/etc/passwd"; then
       for permissions in $ADD_APPLICATION_DIRS $APPLICATION_DIRS; do
         if [ -n "$permissions" ] && [ -e "$permissions" ]; then
           chown -Rf "$change_user" "$permissions" 2>/dev/null
@@ -748,7 +781,7 @@ __fix_permissions() {
     fi
   fi
   if [ -n "$change_group" ]; then
-    if grep -shq "^$change_group:" "/etc/group"; then
+    if grep -shq -- "^$change_group:" "/etc/group"; then
       for permissions in $ADD_APPLICATION_DIRS $APPLICATION_DIRS; do
         if [ -n "$permissions" ] && [ -e "$permissions" ]; then
           chgrp -Rf "$change_group" "$permissions" 2>/dev/null
@@ -809,7 +842,7 @@ __set_user_group_id() {
     return 0
   fi
   # Nothing to do if the user does not exist yet
-  if ! grep -shq "^$set_user:" "/etc/passwd" "/etc/group"; then
+  if ! grep -shq -- "^$set_user:" "/etc/passwd" "/etc/group"; then
     return 0
   fi
   set_uid="$(__get_uid "$set_user" || echo "$set_uid")"
@@ -841,7 +874,7 @@ __create_service_user() {
     return 0
   fi
   # Ensure log directory exists
-  [ -d "$(dirname "$log_file")" ] || mkdir -p "$(dirname "$log_file")" 2>/dev/null
+  [ -d "${log_file%/*}" ] || mkdir -p "${log_file%/*}" 2>/dev/null
   # Validate user/group name format (alphanumeric, underscore, hyphen; must start with letter or underscore)
   if [ -n "$create_user" ] && [[ ! "$create_user" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
     echo "Error: Invalid username format '$create_user' - must start with letter/underscore, contain only lowercase alphanumeric, underscore, or hyphen" >&2
@@ -852,7 +885,7 @@ __create_service_user() {
     return 1
   fi
   # Check if user and group already exist
-  if grep -shq "^$create_user:" "/etc/passwd" && grep -shq "^$create_group:" "/etc/group"; then
+  if grep -shq -- "^$create_user:" "/etc/passwd" && grep -shq -- "^$create_group:" "/etc/group"; then
     return 0
   fi
   # Override with RUNAS_USER if specified and not root
@@ -898,7 +931,7 @@ __create_service_user() {
     if ! groupadd --force --system -g "$create_gid" "$create_group" 2>&1 | tee -a "$log_file"; then
       echo "Error: Failed to create group '$create_group'" >&2
       exitStatus=$((exitStatus + 1))
-    elif ! grep -shq "^$create_group:" "/etc/group"; then
+    elif ! grep -shq -- "^$create_group:" "/etc/group"; then
       echo "Error: Group '$create_group' not found in /etc/group after creation" >&2
       exitStatus=$((exitStatus + 1))
     fi
@@ -909,7 +942,7 @@ __create_service_user() {
     if ! useradd --system --uid "$create_uid" --gid "$create_group" --comment "Account for $create_user" --home-dir "$create_home_dir" --shell /bin/false "$create_user" 2>&1 | tee -a "$log_file"; then
       echo "Error: Failed to create user '$create_user'" >&2
       exitStatus=$((exitStatus + 1))
-    elif ! grep -shq "^$create_user:" "/etc/passwd"; then
+    elif ! grep -shq -- "^$create_user:" "/etc/passwd"; then
       echo "Error: User '$create_user' not found in /etc/passwd after creation" >&2
       exitStatus=$((exitStatus + 1))
     fi
@@ -933,7 +966,7 @@ __create_service_user() {
         echo "$create_user ALL=(ALL)   NOPASSWD: ALL" >"/etc/sudoers.d/$create_user" 2>/dev/null || echo "Warning: Failed to create sudoers file for '$create_user'" >&2
         chmod 0440 "/etc/sudoers.d/$create_user" 2>/dev/null
       fi
-    elif [ -f "/etc/sudoers" ] && ! grep -qs "^$create_user " "/etc/sudoers"; then
+    elif [ -f "/etc/sudoers" ] && ! grep -qs -- "^$create_user " "/etc/sudoers"; then
       echo "$create_user ALL=(ALL)   NOPASSWD: ALL" >>"/etc/sudoers" 2>/dev/null || echo "Warning: Failed to add '$create_user' to sudoers" >&2
     fi
     SERVICE_UID="$create_uid"
@@ -959,7 +992,7 @@ __create_env_file() {
   local sample_file="/usr/local/etc/docker/env/default.sample"
   [ -f "$sample_file" ] || return 0
   for create_env in "/usr/local/etc/docker/env/default.sh" "${envFile[@]}"; do
-    dir="$(dirname "$create_env")"
+    dir="${create_env%/*}"
     [ -d "$dir" ] || mkdir -p "$dir"
     if [ -n "$create_env" ] && [ ! -f "$create_env" ]; then
       cp -f "$sample_file" "$create_env"
@@ -1073,7 +1106,7 @@ __start_init_scripts() {
                   __service_banner "✅" "Service $service started successfully -" "PID: ${retPID} ($found_process)"
                 elif [ -f "$expected_pid_file" ]; then
                   # No running process but PID file exists - verify PID is valid
-                  file_pid=$(cat "$expected_pid_file" 2>/dev/null)
+                  file_pid=$(<"$expected_pid_file" 2>/dev/null)
                   if [ -n "$file_pid" ] && kill -0 "$file_pid" 2>/dev/null; then
                     initStatus="0"
                     __service_banner "✅" "Service $service started successfully -" "PID: $file_pid (from file)"
@@ -1147,7 +1180,10 @@ __setup_mta() {
   # Port 25 is plain SMTP — no TLS; anything else defaults to TLS on
   local relay_use_tls="Yes"
   local relay_smtp_tls="yes"
-  [ "$relay_port" = "25" ] && relay_use_tls="No" && relay_smtp_tls="no"
+  if [ "$relay_port" = "25" ]; then
+    relay_use_tls="No"
+    relay_smtp_tls="no"
+  fi
   ################# msmtp relay setup
   if command -v msmtp &>/dev/null; then
     [ -d "/config/msmtp" ] || mkdir -p "/config/msmtp"
@@ -1187,7 +1223,6 @@ EOF
   elif command -v ssmtp &>/dev/null; then
     [ -d "/config/ssmtp" ] || mkdir -p "/config/ssmtp"
     [ -f "/etc/ssmtp/ssmtp.conf" ] && __rm "/etc/ssmtp/ssmtp.conf"
-    symlink_files="$(__find_file_relative "/config/ssmtp")"
     if [ ! -f "/config/ssmtp/ssmtp.conf" ]; then
       cat >"/config/ssmtp/ssmtp.conf" <<EOF
 # ssmtp configuration.
@@ -1205,6 +1240,9 @@ FromLineOverride=yes
 
 EOF
     fi
+    # Computed after config creation so a fresh /config/ssmtp still picks up
+    # the just-created ssmtp.conf instead of symlinking nothing on first run
+    symlink_files="$(__find_file_relative "/config/ssmtp")"
     if [ -f "/config/ssmtp/ssmtp.conf" ]; then
       # __symlink(from, to) requires the "to" (config) side to already exist
       # and creates "from" (etc) as a symlink to it — arguments were reversed here
@@ -1229,7 +1267,6 @@ EOF
     [ -d "/etc/postfix" ] || mkdir -p "/etc/postfix"
     [ -d "/config/postfix" ] || mkdir -p "/config/postfix"
     [ -f "/etc/postfix/main.cf" ] && __rm "/etc/postfix/main.cf"
-    symlink_files="$(__find_file_relative "/config/postfix")"
     if [ ! -f "/config/postfix/main.cf" ]; then
       cat >"/config/postfix/main.cf" <<EOF
 # postfix configuration.
@@ -1258,6 +1295,9 @@ relayhost = [$relay_server]:$relay_port
 
 EOF
     fi
+    # Computed after config creation so a fresh /config/postfix still picks
+    # up the just-created main.cf instead of symlinking nothing on first run
+    symlink_files="$(__find_file_relative "/config/postfix")"
     if [ -d "/config/postfix" ]; then
       # __symlink(from, to) requires the "to" (config) side to already exist
       # and creates "from" (etc) as a symlink to it — arguments were reversed here
@@ -1485,7 +1525,13 @@ __initialize_ssl_certs() {
       __create_ssl_cert
     fi
   fi
-  type update-ca-certificates &>/dev/null && update-ca-certificates &>/dev/null
+  # Explicit return so a missing update-ca-certificates binary (common on
+  # minimal images) never becomes this function's return value — under
+  # set -eo pipefail that would abort the caller when this is called bare
+  if type update-ca-certificates &>/dev/null; then
+    update-ca-certificates &>/dev/null
+  fi
+  return 0
 }
 # - - - - - - - - - - - - - - - - - - - - - - - - -
 __start_php_dev_server() {
@@ -1569,8 +1615,14 @@ __backup() {
   [ -d "/config" ] && dirs+=("/config")
   [ -d "$logDir" ] || mkdir -p "$logDir"
   [ -d "$backup_dir" ] || mkdir -p "$backup_dir"
-  [ "${#dirs[@]}" -eq 0 ] && echo "BACKUP_DIR is unset" >&2 && return 1
-  [ -f "$pidFile" ] && echo "A backup job is already running" >&2 && return 1
+  if [ "${#dirs[@]}" -eq 0 ]; then
+    echo "BACKUP_DIR is unset" >&2
+    return 1
+  fi
+  if [ -f "$pidFile" ]; then
+    echo "A backup job is already running" >&2
+    return 1
+  fi
   echo "$$" >"$pidFile"
   trap "rm -f '$pidFile'" EXIT INT TERM
   echo "Starting backup in $(date)" >>"$logDir/$CONTAINER_NAME"
