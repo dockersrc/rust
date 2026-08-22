@@ -181,6 +181,7 @@ Run miri with: `cargo +nightly miri test`
 | `cargo-geiger` | Counts `unsafe` blocks and dependencies — reports unsafe surface area |
 | `cargo-deny` | Policy enforcement — license allow-lists, ban crates, advisories |
 | `cargo-audit` | Scan `Cargo.lock` against the RustSec advisory DB |
+| `cargo-about` | Generate a third-party license report/notice from `Cargo.lock` |
 | `cargo-cyclonedx` | Generate a CycloneDX SBOM from `Cargo.lock` |
 | `cargo-machete` | Detect unused dependencies (stable) |
 | `cargo-udeps` | Detect unused dependencies (nightly; `cargo +nightly udeps`) |

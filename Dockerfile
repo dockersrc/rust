@@ -110,6 +110,7 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       cargo-expand \
       bacon \
       cargo-audit \
+      cargo-about \
       cargo-deny \
       cargo-cyclonedx \
       cargo-machete \
