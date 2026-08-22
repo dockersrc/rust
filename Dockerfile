@@ -111,6 +111,7 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       bacon \
       cargo-audit \
       cargo-about \
+      cargo-auditable \
       cargo-deny \
       cargo-cyclonedx \
       cargo-machete \
@@ -122,6 +123,7 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       cargo-chef \
       cargo-zigbuild \
       cargo-nextest \
+      cargo-insta \
       just \
       tokei \
       hyperfine \
@@ -132,6 +134,7 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       taplo-cli \
       cargo-sort \
       cargo-hack \
+      cargo-hakari \
       dprint \
       grcov \
       cargo-llvm-cov \
@@ -140,9 +143,10 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       wasm-tools \
       wasm-bindgen-cli \
       cbindgen \
+      cargo-c \
       cargo-binutils \
       cargo-bloat \
-      cargo-asm \
+      cargo-show-asm \
       cargo-criterion \
       cargo-careful \
       cargo-public-api \
@@ -162,7 +166,11 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       flamegraph \
       probe-rs-tools \
       sqlx-cli \
-      sea-orm-cli; \
+      sea-orm-cli \
+      cargo-modules \
+      cargo-get \
+      cargo-cache \
+      cargo-readme; \
     do \
       cargo binstall -y --disable-strategies compile --target "${RUST_TARGET}" "${tool}" || true; \
     done

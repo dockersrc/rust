@@ -181,6 +181,7 @@ Run miri with: `cargo +nightly miri test`
 | `cargo-geiger` | Counts `unsafe` blocks and dependencies — reports unsafe surface area |
 | `cargo-deny` | Policy enforcement — license allow-lists, ban crates, advisories |
 | `cargo-audit` | Scan `Cargo.lock` against the RustSec advisory DB |
+| `cargo-auditable` | Embed dependency info into the compiled binary so it can be audited later |
 | `cargo-about` | Generate a third-party license report/notice from `Cargo.lock` |
 | `cargo-cyclonedx` | Generate a CycloneDX SBOM from `Cargo.lock` |
 | `cargo-machete` | Detect unused dependencies (stable) |
@@ -206,6 +207,7 @@ Run miri with: `cargo +nightly miri test`
 | Tool | Purpose |
 |------|---------|
 | `cargo-nextest` | Faster test runner — parallel, per-test timeouts, JUnit output |
+| `cargo-insta` | Snapshot testing — review and accept `.snap` file diffs from the CLI |
 | `cargo-llvm-cov` | Source-based code coverage using LLVM instrumentation |
 | `cargo-tarpaulin` | Coverage via ptrace — useful when LLVM instrumentation isn't available |
 | `grcov` | Mozilla's LLVM coverage aggregator — converts profraw data to lcov/HTML |
@@ -246,9 +248,10 @@ Run miri with: `cargo +nightly miri test`
 | Tool | Purpose |
 |------|---------|
 | `cargo-expand` | Expand proc-macros and `macro_rules!` to plain Rust |
-| `cargo-asm` | Disassemble a function to see the emitted assembly |
+| `cargo-show-asm` | Disassemble a function to see the emitted assembly (maintained successor to `cargo-asm`) |
 | `cargo-bloat` | Identify what is taking space in your binary |
 | `cargo-binutils` | `llvm-size`, `llvm-nm`, `llvm-objdump`, etc. via `cargo-` wrappers |
+| `cargo-modules` | Visualize and query a crate's module tree |
 | `tokei` | Count lines of code by language |
 
 ### Build & release
@@ -262,6 +265,7 @@ Run miri with: `cargo +nightly miri test`
 | `cargo-deb` | Build `.deb` packages directly from `Cargo.toml` |
 | `cargo-generate` | Scaffold new crates from templates |
 | `cargo-chef` | Docker layer caching for Cargo builds — pre-cook dependencies |
+| `cargo-c` | Build C-compatible static/shared libs with headers and a `.pc` file |
 
 ### Cross-compilation
 
@@ -289,6 +293,7 @@ Run miri with: `cargo +nightly miri test`
 |------|---------|
 | `mdbook` | Build documentation books from Markdown |
 | `mdbook-toc` | Auto-generate table-of-contents for mdBook chapters |
+| `cargo-readme` | Generate `README.md` from crate-root doc comments |
 
 ### Workflow & dev loop
 
@@ -300,6 +305,8 @@ Run miri with: `cargo +nightly miri test`
 | `cargo-update` | Update installed cargo binaries (`cargo install-update -a`) |
 | `cargo-outdated` | Show outdated `Cargo.toml` dependencies |
 | `cargo-info` | Detailed crate info from crates.io |
+| `cargo-get` | Read `Cargo.toml` metadata fields from scripts/CI |
+| `cargo-hakari` | Manage a workspace-hack crate to speed up workspace builds |
 | `cargo-msrv` | Find and verify the minimum supported Rust version |
 
 ### Compilation cache
@@ -307,6 +314,7 @@ Run miri with: `cargo +nightly miri test`
 | Tool | Purpose |
 |------|---------|
 | `sccache` | Shared compilation cache — cache on local disk, S3, Redis, GCS, or Azure |
+| `cargo-cache` | Inspect and clean the `~/.cargo` registry/git cache |
 
 ### Database (best-effort)
 
