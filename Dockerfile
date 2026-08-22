@@ -146,7 +146,6 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       cargo-c \
       cargo-binutils \
       cargo-bloat \
-      cargo-show-asm \
       cargo-criterion \
       cargo-careful \
       cargo-public-api \
@@ -175,8 +174,8 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
 # cargo-public-api, cargo-spellcheck, cargo-dist, sea-orm-cli confirmed via
 # `cargo binstall` "Fallback to cargo-install is disabled" on both amd64 and
 # arm64 (a 404 from every prebuilt source, not a rate-limit issue);
-# cargo-modules, cargo-get, cargo-cache, cargo-readme have no GitHub release
-# assets published at all, same net effect. For just these, allow the
+# cargo-modules, cargo-get, cargo-cache, cargo-readme, cargo-show-asm have no
+# GitHub release assets published at all, same net effect. For just these, allow the
 # compile fallback: this stage already cross-links via the
 # zig wrapper scripts above, so compiling here is a native cross-build, not
 # QEMU emulation, and stays fast for this small a tool set.
@@ -199,7 +198,8 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       cargo-modules \
       cargo-get \
       cargo-cache \
-      cargo-readme; \
+      cargo-readme \
+      cargo-show-asm; \
     do \
       cargo binstall -y --target "${RUST_TARGET}" "${tool}" || true; \
     done
