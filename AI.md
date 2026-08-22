@@ -29,6 +29,7 @@ template changes, creating new repos) is NOT in this file — it lives in the
 | 6 | README.md standard layout |
 | 7 | CI/CD workflows |
 | 8 | Verification & commit |
+| 9 | Examples from real repos |
 
 ---
 
@@ -696,3 +697,68 @@ gitcommit --dir "$(git rev-parse --show-toplevel)" all
 
 `git commit` / `git push` directly are forbidden. Never commit with a failing syntax
 gate.
+
+---
+
+# PART 9: EXAMPLES FROM REAL REPOS
+
+Real excerpts from live `dockersrc` repos, showing how the conventions look in
+practice. Use these as reference patterns — do not copy them verbatim into other
+repos; adapt names, paths, and versions.
+
+## 9.1 — Non-stub `05-custom.sh` (toolchain install, from `dockersrc/go`)
+
+A base/toolchain repo owns its `05-custom.sh` when it installs anything beyond
+packages. The go repo (221 lines) shows the full pattern: env block, helper
+functions, download with retries, verification, cleanup. Key excerpt:
+
+```bash
+# Set bash options
+set -eo pipefail
+[ "$DEBUGGER" = "on" ] && echo "Enabling debugging" && set -x$DEBUGGER_OPTIONS
+# Force IPv4 for all curl calls in this script — the base image IPv6 routing
+# intercepts *.github.com and presents a cert for casjay.in, causing SAN mismatch
+printf -- '-4\n' > /root/.curlrc
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# Set env variables
+VERSION="202607271500-git"
+CUSTOM_EXITCODE=0
+
+# Installation root for the Go distribution (not GOPATH)
+CUSTOM_GOINSTALL_DIR="/usr/local/go"
+# GOPATH: module cache, pkg index, user-installed binaries (declared VOLUME)
+CUSTOM_GOPATH_DIR="/usr/local/share/go"
+# Baked-in tool binaries land here so they are on the default PATH
+CUSTOM_GOBIN_DIR="/usr/local/bin"
+# Throwaway build cache used only during this image build layer
+CUSTOM_GOCACHE_BUILD="/tmp/go-build-cache"
+
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# Helpers
+
+# Return the latest release tag from GitHub; retries up to 3 times on transient errors
+# (rate-limit 403s are common in parallel multi-platform builds without a token).
+# Set GITHUB_TOKEN to raise the authenticated rate limit (5000 req/hr vs 60 req/hr).
+__gh_latest() {
+  local repo="$1"
+  local filter="${2:-.tag_name}"
+  ...
+}
+```
+
+Patterns to note:
+
+- Comments sit ABOVE the line they describe, never inline
+- All script-local variables carry a `CUSTOM_` prefix so a dead-variable audit can
+  distinguish them from template-provided vars
+- Version resolution queries the upstream API with retries and a pinned fallback —
+  never a hardcoded latest version
+- Everything downloaded is verified (checksum or successful `--version` run) before
+  the script exits 0
+
+## 9.2 — Stub `05-custom.sh` (from `dockersrc/alpine`)
+
+Pure OS base repos keep the generated 43-line stub untouched — header, bash
+options, `exitCode=0`, exit. A stub is template-owned: `gen-dockerfile` may
+overwrite it freely. The moment a repo adds real logic to `05-custom.sh` it becomes
+repo-owned and must never be regenerated (PART 2 ownership rules).
