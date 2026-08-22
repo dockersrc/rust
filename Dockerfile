@@ -166,19 +166,18 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       flamegraph \
       probe-rs-tools \
       sqlx-cli \
-      sea-orm-cli \
-      cargo-modules \
-      cargo-get \
-      cargo-cache \
-      cargo-readme; \
+      sea-orm-cli; \
     do \
       cargo binstall -y --disable-strategies compile --target "${RUST_TARGET}" "${tool}" || true; \
     done
 
-# A handful of tools ship no prebuilt for musl targets at all (verified via
+# A handful of tools ship no prebuilt for musl targets at all — taplo-cli,
+# cargo-public-api, cargo-spellcheck, cargo-dist, sea-orm-cli confirmed via
 # `cargo binstall` "Fallback to cargo-install is disabled" on both amd64 and
-# arm64 — a 404 from every prebuilt source, not a rate-limit issue). For just
-# these, allow the compile fallback: this stage already cross-links via the
+# arm64 (a 404 from every prebuilt source, not a rate-limit issue);
+# cargo-modules, cargo-get, cargo-cache, cargo-readme have no GitHub release
+# assets published at all, same net effect. For just these, allow the
+# compile fallback: this stage already cross-links via the
 # zig wrapper scripts above, so compiling here is a native cross-build, not
 # QEMU emulation, and stays fast for this small a tool set.
 # openssl-libs-static is required alongside openssl-dev: Alpine's openssl-dev
@@ -196,7 +195,11 @@ RUN --mount=type=cache,id=cargo-registry-native,sharing=shared,target=/usr/local
       cargo-public-api \
       cargo-spellcheck \
       cargo-dist \
-      sea-orm-cli; \
+      sea-orm-cli \
+      cargo-modules \
+      cargo-get \
+      cargo-cache \
+      cargo-readme; \
     do \
       cargo binstall -y --target "${RUST_TARGET}" "${tool}" || true; \
     done
